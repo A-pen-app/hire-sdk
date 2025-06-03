@@ -9,15 +9,15 @@ import (
 
 type ResumeContent struct {
 	// common
-	RealName           string              `json:"real_name"`            // Shared by all
-	Email              string              `json:"email"`                // Shared by all
-	PhoneNumber        string              `json:"phone_number"`         // Shared by all
-	PreferredLocations []string            `json:"preferred_locations"`  // Shared by all
-	ExpectedSalary     *string             `json:"expected_salary"`      // Shared by all
-	CollaborationType  []CollaborationType `json:"collaboration_type"`   // Shared by all
-	AvailableStartDate *string             `json:"available_start_date"` // Shared by all
-	SpecialRequirement *string             `json:"special_requirement"`  // Shared by all
-	ContactTime        []ContactTime       `json:"contact_time"`         // Shared by all
+	RealName           string              `json:"real_name"`
+	Email              string              `json:"email"`
+	PhoneNumber        string              `json:"phone_number"`
+	PreferredLocations []string            `json:"preferred_locations"`
+	ExpectedSalary     *string             `json:"expected_salary"`
+	CollaborationType  []CollaborationType `json:"collaboration_type"`
+	AvailableStartDate *string             `json:"available_start_date"`
+	SpecialRequirement *string             `json:"special_requirement"`
+	ContactTime        []ContactTime       `json:"contact_time"`
 
 	// for doctor
 	Position     *string  `json:"position,omitempty"`

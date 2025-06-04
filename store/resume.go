@@ -27,7 +27,7 @@ func (s *resumeStore) Update(ctx context.Context, userID string, content *models
 	return nil
 }
 
-func (s *resumeStore) CreateSnapshot(ctx context.Context, resumeID string, chatID string, content *models.ResumeContent) (*models.ResumeSnapshot, error) {
+func (s *resumeStore) CreateSnapshot(ctx context.Context, userID string, chatID string) (*models.ResumeSnapshot, error) {
 	return nil, nil
 }
 

@@ -20,10 +20,10 @@ type ResumeContent struct {
 	ContactTime        []ContactTime       `json:"contact_time"`
 
 	// for doctor
-	Position     *string  `json:"position,omitempty"`
-	Departments  []string `json:"departments,omitempty"`
-	Subspecialty *string  `json:"subspecialty,omitempty"`
-	Expertise    *string  `json:"expertise,omitempty"`
+	Position        *string  `json:"position,omitempty"`
+	Departments     []string `json:"departments,omitempty"`
+	CustomSpecialty *string  `json:"CustomSpecialty,omitempty"`
+	Expertise       *string  `json:"expertise,omitempty"`
 
 	// for doctor and pharmacist
 	AlmaMater        *AlmaMater `json:"alma_mater,omitempty"`

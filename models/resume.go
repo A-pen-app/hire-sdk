@@ -51,8 +51,8 @@ type ContactTime struct {
 }
 
 type AlmaMater struct {
-	Key   string  `json:"key"`
-	Value *string `json:"value"`
+	Key         string  `json:"key"`
+	CustomValue *string `json:"custom_value"`
 }
 
 type CollaborationType int
@@ -76,9 +76,9 @@ type Resume struct {
 	UpdateAt time.Time     `json:"-" db:"update_at"`
 }
 
-type ResumeHistory struct {
+type ResumeSnapshot struct {
 	ID        string        `json:"-" db:"id"`
-	UserID    string        `json:"-" db:"user_id"`
+	ResumeID  string        `json:"-" db:"resume_id"`
 	Content   ResumeContent `json:"content" db:"content"`
 	CreatedAt time.Time     `json:"-" db:"created_at"`
 	ChatID    string        `json:"chat_id" db:"chat_id"`

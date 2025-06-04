@@ -27,10 +27,10 @@ func (s *resumeStore) Update(ctx context.Context, userID string, content *models
 	return nil
 }
 
-func (s *resumeStore) CreateHistory(ctx context.Context, userID string, chatID string, content *models.ResumeContent) (*models.ResumeHistory, error) {
+func (s *resumeStore) CreateSnapshot(ctx context.Context, resumeID string, chatID string, content *models.ResumeContent) (*models.ResumeSnapshot, error) {
 	return nil, nil
 }
 
-func (s *resumeStore) GetHistory(ctx context.Context, id string) (*models.ResumeHistory, error) {
+func (s *resumeStore) GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error) {
 	return nil, nil
 }

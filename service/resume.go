@@ -25,6 +25,6 @@ func (s *resumeService) Get(ctx context.Context, userID string) (*models.Resume,
 	return nil, nil
 }
 
-func (s *resumeService) GetHistory(ctx context.Context, resumeID string) (*models.ResumeHistory, error) {
+func (s *resumeService) GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error) {
 	return nil, nil
 }

@@ -3,5 +3,5 @@
 ## Installation
 
 ```bash
-go get github.com/your-username/resume-sdk
+go get github.com/A-pen-app/resume-sdk
 ```

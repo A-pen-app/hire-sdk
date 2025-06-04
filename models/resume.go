@@ -69,11 +69,11 @@ const (
 )
 
 type Resume struct {
-	ID       string        `json:"-" db:"id"`
-	UserID   string        `json:"-" db:"user_id"`
-	Content  ResumeContent `json:"content" db:"content"`
-	CreateAt time.Time     `json:"-" db:"create_at"`
-	UpdateAt time.Time     `json:"-" db:"update_at"`
+	ID        string        `json:"-" db:"id"`
+	UserID    string        `json:"-" db:"user_id"`
+	Content   ResumeContent `json:"content" db:"content"`
+	CreatedAt time.Time     `json:"-" db:"created_at"`
+	UpdatedAt time.Time     `json:"-" db:"updated_at"`
 }
 
 type ResumeSnapshot struct {

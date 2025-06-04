@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/A-pen-app/resume-sdk/models"
 	"github.com/A-pen-app/resume-sdk/store"
@@ -18,13 +19,24 @@ func NewResume(ctx context.Context, store store.Resume) Resume {
 }
 
 func (s *resumeService) Patch(ctx context.Context, userID string, resume *models.ResumeContent) error {
-	return nil
+	return s.store.Update(ctx, userID, resume)
 }
 
 func (s *resumeService) Get(ctx context.Context, userID string) (*models.Resume, error) {
-	return nil, nil
+	resume, err := s.store.Get(ctx, userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			resume, err = s.store.Create(ctx, userID, &models.ResumeContent{})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+	return resume, nil
 }
 
 func (s *resumeService) GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error) {
-	return nil, nil
+	return s.store.GetSnapshot(ctx, snapshotID)
 }

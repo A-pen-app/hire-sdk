@@ -69,19 +69,19 @@ const (
 )
 
 type Resume struct {
-	ID        string        `json:"-" db:"id"`
-	UserID    string        `json:"-" db:"user_id"`
-	Content   ResumeContent `json:"content" db:"content"`
-	CreatedAt time.Time     `json:"-" db:"created_at"`
-	UpdatedAt time.Time     `json:"-" db:"updated_at"`
+	ID        string         `json:"-" db:"id"`
+	UserID    string         `json:"-" db:"user_id"`
+	Content   *ResumeContent `json:"content" db:"content"`
+	CreatedAt time.Time      `json:"-" db:"created_at"`
+	UpdatedAt time.Time      `json:"-" db:"updated_at"`
 }
 
 type ResumeSnapshot struct {
-	ID        string        `json:"-" db:"id"`
-	ResumeID  string        `json:"-" db:"resume_id"`
-	Content   ResumeContent `json:"content" db:"content"`
-	CreatedAt time.Time     `json:"-" db:"created_at"`
-	ChatID    string        `json:"chat_id" db:"chat_id"`
+	ID        string         `json:"-" db:"id"`
+	ResumeID  string         `json:"-" db:"resume_id"`
+	Content   *ResumeContent `json:"content" db:"content"`
+	CreatedAt time.Time      `json:"-" db:"created_at"`
+	ChatID    string         `json:"chat_id" db:"chat_id"`
 }
 
 // Value implements the driver.Valuer interface for inserting as jsonb

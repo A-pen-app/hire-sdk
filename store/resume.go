@@ -53,7 +53,7 @@ func (s *resumeStore) Create(ctx context.Context, userID string, content *models
 	return &models.Resume{
 		ID:        returnedID,
 		UserID:    userID,
-		Content:   *content,
+		Content:   content,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}, nil

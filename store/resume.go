@@ -13,7 +13,7 @@ type resumeStore struct {
 	db *sqlx.DB
 }
 
-func NewResume(ctx context.Context, db *sqlx.DB) Resume {
+func NewResume(db *sqlx.DB) Resume {
 	return &resumeStore{db: db}
 }
 

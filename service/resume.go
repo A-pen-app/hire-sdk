@@ -12,7 +12,7 @@ type resumeService struct {
 	store store.Resume
 }
 
-func NewResume(store store.Resume) *resumeService {
+func NewResume(store store.Resume) Resume {
 	return &resumeService{
 		store: store,
 	}

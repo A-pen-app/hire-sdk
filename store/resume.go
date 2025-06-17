@@ -185,7 +185,8 @@ func (s *resumeStore) CreateRelation(ctx context.Context, userID string, snapsho
 		snapshot_id,
 		post_id,
 		chat_id,
-		created_at
+		created_at,
+		updated_at
 	)
 	VALUES (
 		?,
@@ -209,6 +210,7 @@ func (s *resumeStore) CreateRelation(ctx context.Context, userID string, snapsho
 		PostID:     postID,
 		ChatID:     chatID,
 		CreatedAt:  now,
+		UpdatedAt:  now,
 	}, nil
 }
 
@@ -220,7 +222,8 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 		snapshot_id,
 		post_id,
 		chat_id,
-		created_at
+		created_at,
+		updated_at
 	FROM public.resume_relation
 	WHERE chat_id = ?
 	`
@@ -234,6 +237,7 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 		&relation.PostID,
 		&relation.ChatID,
 		&relation.CreatedAt,
+		&relation.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

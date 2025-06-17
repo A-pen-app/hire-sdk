@@ -92,6 +92,7 @@ type ResumeRelation struct {
 	PostID     string    `json:"-" db:"post_id"`
 	ChatID     string    `json:"-" db:"chat_id"`
 	CreatedAt  time.Time `json:"-" db:"created_at"`
+	UpdatedAt  time.Time `json:"-" db:"updated_at"`
 }
 
 // Value implements the driver.Valuer interface for inserting as jsonb

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/A-pen-app/resume-sdk/models"
+	"github.com/A-pen-app/hire-sdk/models"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -104,7 +104,7 @@ func (s *resumeStore) Update(ctx context.Context, userID string, content *models
 	return nil
 }
 
-func (s *resumeStore) CreateSnapshot(ctx context.Context, userID string, chatID string) (*models.ResumeSnapshot, error) {
+func (s *resumeStore) CreateSnapshot(ctx context.Context, userID string) (*models.ResumeSnapshot, error) {
 	snapshotID := uuid.New().String()
 	now := time.Now()
 
@@ -118,8 +118,7 @@ func (s *resumeStore) CreateSnapshot(ctx context.Context, userID string, chatID 
 		id,
 		resume_id,
 		content,
-		created_at,
-		chat_id
+		created_at
 	)
 	VALUES (
 		?,
@@ -136,7 +135,6 @@ func (s *resumeStore) CreateSnapshot(ctx context.Context, userID string, chatID 
 		resume.ID,
 		resume.Content,
 		now,
-		chatID,
 	)
 	if err != nil {
 		return nil, err
@@ -147,7 +145,6 @@ func (s *resumeStore) CreateSnapshot(ctx context.Context, userID string, chatID 
 		ResumeID:  resume.ID,
 		Content:   resume.Content,
 		CreatedAt: now,
-		ChatID:    chatID,
 	}, nil
 }
 
@@ -157,8 +154,7 @@ func (s *resumeStore) GetSnapshot(ctx context.Context, snapshotID string) (*mode
 		id,
 		resume_id,
 		content,
-		created_at,
-		chat_id
+		created_at
 	FROM public.resume_snapshot 
 	WHERE id = ?
 	`
@@ -170,11 +166,84 @@ func (s *resumeStore) GetSnapshot(ctx context.Context, snapshotID string) (*mode
 		&snapshot.ResumeID,
 		&snapshot.Content,
 		&snapshot.CreatedAt,
-		&snapshot.ChatID,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &snapshot, nil
+}
+
+func (s *resumeStore) CreateRelation(ctx context.Context, userID string, snapshotID string, chatID string, postID string) (*models.ResumeRelation, error) {
+	relationID := uuid.New().String()
+	now := time.Now()
+
+	query := `
+	INSERT INTO public.resume_relation (
+		id,
+		user_id,
+		snapshot_id,
+		post_id,
+		chat_id,
+		created_at,
+		updated_at
+	)
+	VALUES (
+		?,
+		?,
+		?,
+		?,
+		?,
+		?,
+		?
+	)
+	`
+	query = s.db.Rebind(query)
+
+	_, err := s.db.Exec(query, relationID, userID, snapshotID, postID, chatID, now, now)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.ResumeRelation{
+		ID:         relationID,
+		UserID:     userID,
+		SnapshotID: snapshotID,
+		PostID:     postID,
+		ChatID:     chatID,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}, nil
+}
+
+func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.ResumeRelation, error) {
+	query := `
+	SELECT 
+		id,
+		user_id,
+		snapshot_id,
+		post_id,
+		chat_id,
+		created_at,
+		updated_at
+	FROM public.resume_relation
+	WHERE chat_id = ?
+	`
+	query = s.db.Rebind(query)
+
+	var relation models.ResumeRelation
+	err := s.db.QueryRowx(query, chatID).Scan(
+		&relation.ID,
+		&relation.UserID,
+		&relation.SnapshotID,
+		&relation.PostID,
+		&relation.ChatID,
+		&relation.CreatedAt,
+		&relation.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &relation, nil
 }

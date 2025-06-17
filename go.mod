@@ -1,4 +1,4 @@
-module github.com/A-pen-app/resume-sdk
+module github.com/A-pen-app/hire-sdk
 
 go 1.22.8
 

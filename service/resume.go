@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/A-pen-app/resume-sdk/models"
-	"github.com/A-pen-app/resume-sdk/store"
+	"github.com/A-pen-app/hire-sdk/models"
+	"github.com/A-pen-app/hire-sdk/store"
 )
 
 type resumeService struct {

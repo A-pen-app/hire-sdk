@@ -9,20 +9,20 @@ import (
 
 type ResumeContent struct {
 	// common
-	RealName           string              `json:"real_name"`
-	Email              string              `json:"email"`
-	PhoneNumber        string              `json:"phone_number"`
+	RealName           *string             `json:"real_name"`
+	Email              *string             `json:"email"`
+	PhoneNumber        *string             `json:"phone_number"`
 	PreferredLocations []string            `json:"preferred_locations"`
 	ExpectedSalary     *string             `json:"expected_salary"`
-	CollaborationType  []CollaborationType `json:"collaboration_type"`
+	CollaborationTypes []CollaborationType `json:"collaboration_types"`
 	AvailableStartDate *string             `json:"available_start_date"`
 	SpecialRequirement *string             `json:"special_requirement"`
-	ContactTime        []ContactTime       `json:"contact_time"`
+	ContactTimes       []ContactTime       `json:"contact_times"`
 
 	// for doctor
 	Position        *string  `json:"position,omitempty"`
 	Departments     []string `json:"departments,omitempty"`
-	CustomSpecialty *string  `json:"CustomSpecialty,omitempty"`
+	CustomSpecialty *string  `json:"custom_specialty,omitempty"`
 	Expertise       *string  `json:"expertise,omitempty"`
 
 	// for doctor and pharmacist
@@ -58,14 +58,16 @@ type AlmaMater struct {
 type CollaborationType int
 
 const (
-	CollaborationType_FullTime       CollaborationType = iota // 全職
-	CollaborationType_PartTime                                // 兼職
-	CollaborationType_Attending                               // 掛牌
-	CollaborationType_Lecturer                                // 講座
-	CollaborationType_Prescription                            // 葉配
-	CollaborationType_Endorsement                             // 代言
-	CollaborationType_Telemedicine                            // 遠距醫療
-	CollaborationType_MarketResearch                          // 市調訪談
+	CollaborationType_FullTime          CollaborationType = iota // 全職
+	CollaborationType_PartTime                                   // 兼職
+	CollaborationType_Attending                                  // 掛牌
+	CollaborationType_Lecturer                                   // 講座
+	CollaborationType_Prescription                               // 葉配
+	CollaborationType_Endorsement                                // 代言
+	CollaborationType_Telemedicine                               // 遠距醫療
+	CollaborationType_MarketResearch                             // 市調訪談
+	CollaborationType_AcademicEditing                            // 學術編輯
+	CollaborationType_ProductExperience                          // 產品體驗
 )
 
 type Resume struct {
@@ -81,7 +83,16 @@ type ResumeSnapshot struct {
 	ResumeID  string         `json:"-" db:"resume_id"`
 	Content   *ResumeContent `json:"content" db:"content"`
 	CreatedAt time.Time      `json:"-" db:"created_at"`
-	ChatID    string         `json:"chat_id" db:"chat_id"`
+}
+
+type ResumeRelation struct {
+	ID         string    `json:"-" db:"id"`
+	UserID     string    `json:"-" db:"user_id"`
+	SnapshotID string    `json:"-" db:"snapshot_id"`
+	PostID     string    `json:"-" db:"post_id"`
+	ChatID     string    `json:"-" db:"chat_id"`
+	CreatedAt  time.Time `json:"-" db:"created_at"`
+	UpdatedAt  time.Time `json:"-" db:"updated_at"`
 }
 
 // Value implements the driver.Valuer interface for inserting as jsonb

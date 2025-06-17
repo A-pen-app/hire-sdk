@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/A-pen-app/resume-sdk/models"
+	"github.com/A-pen-app/hire-sdk/models"
 )
 
 type Resume interface {

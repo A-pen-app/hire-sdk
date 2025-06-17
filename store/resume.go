@@ -193,12 +193,14 @@ func (s *resumeStore) CreateRelation(ctx context.Context, userID string, snapsho
 		?,
 		?,
 		?,
+		?,
+		?,
 		?
 	)
 	`
 	query = s.db.Rebind(query)
 
-	_, err := s.db.Exec(query, relationID, snapshotID, chatID, postID, userID, now)
+	_, err := s.db.Exec(query, relationID, userID, snapshotID, postID, chatID, now, now)
 	if err != nil {
 		return nil, err
 	}

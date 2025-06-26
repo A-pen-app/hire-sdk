@@ -18,7 +18,7 @@ type ResumeContent struct {
 	AvailableStartDate *string             `json:"available_start_date"`
 	SpecialRequirement *string             `json:"special_requirement"`
 	ContactTimes       []ContactTime       `json:"contact_times"`
-
+	Gender             string              `json:"gender"`
 	// for doctor
 	Position        *string  `json:"position,omitempty"`
 	Departments     []string `json:"departments,omitempty"`
@@ -79,16 +79,10 @@ type Resume struct {
 }
 
 type ResumeSnapshot struct {
-	ID        string         `json:"-" db:"id"`
+	ID        string         `json:"id" db:"id"`
 	ResumeID  string         `json:"-" db:"resume_id"`
 	Content   *ResumeContent `json:"content" db:"content"`
 	CreatedAt time.Time      `json:"-" db:"created_at"`
-}
-
-type ResumeSnapshotContent struct {
-	ID     string `json:"id"`
-	Gender string `json:"gender"`
-	*ResumeContent
 }
 
 type ResumeRelation struct {

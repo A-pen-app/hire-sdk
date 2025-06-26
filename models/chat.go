@@ -201,9 +201,9 @@ type ChatRoom struct {
 	IsResumeRead  bool      `json:"is_resume_read" db:"is_resume_read"`
 	PostID        string    `json:"post_id" db:"post_id"`
 
-	Role           int                   `json:"role" db:"-"`
-	HireStatus     string                `json:"hire_status" db:"-"`
-	ResumeSnapshot ResumeSnapshotContent `json:"resume_snapshot" db:"-"`
+	Role           int            `json:"role" db:"-"`
+	HireStatus     string         `json:"hire_status" db:"-"`
+	ResumeSnapshot ResumeSnapshot `json:"resume_snapshot" db:"-"`
 }
 
 type MediaType int

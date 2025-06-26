@@ -34,14 +34,14 @@ type ResumeContent struct {
 	CurrentJobTitle     *string `json:"current_job_title,omitempty"`
 
 	// for nurse
-	Age                *int                `json:"age,omitempty"`
+	BirthYear          *string             `json:"birth_year,omitempty"`
 	Certificate        *string             `json:"certificate,omitempty"`
 	HospitalExperience *HospitalExperience `json:"hospital_experience,omitempty"`
 }
 
 type HospitalExperience struct {
-	Department       string  `json:"department"`
-	YearOfGraduation *string `json:"year_of_graduation"`
+	Department       *string `json:"department"`
+	YearOfExperience int     `json:"year_of_experience"`
 }
 
 type ContactTime struct {
@@ -83,6 +83,12 @@ type ResumeSnapshot struct {
 	ResumeID  string         `json:"-" db:"resume_id"`
 	Content   *ResumeContent `json:"content" db:"content"`
 	CreatedAt time.Time      `json:"-" db:"created_at"`
+}
+
+type ResumeSnapshotContent struct {
+	ID     string `json:"id"`
+	Gender string `json:"gender"`
+	*ResumeContent
 }
 
 type ResumeRelation struct {

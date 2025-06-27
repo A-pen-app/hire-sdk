@@ -37,8 +37,7 @@ func (s *chatStore) Get(ctx context.Context, chatID, userID string) (*models.Cha
 		CT.control_flag,
 		C.created_at,
 		C.post_id,
-		CT.is_pinned,
-		C.is_resume_read
+		CT.is_pinned
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
@@ -142,8 +141,7 @@ func (s *chatStore) GetChats(ctx context.Context, userID string, next string, co
 		CT.control_flag,
 		C.created_at,
 		C.post_id,
-		CT.is_pinned,
-		C.is_resume_read
+		CT.is_pinned
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id

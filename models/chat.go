@@ -194,17 +194,24 @@ type ChatRoom struct {
 	IsPinned    bool            `json:"is_pinned" db:"is_pinned"`
 
 	//chat
-	CreatedAt     time.Time `json:"created_at" db:"created_at" example:"2023-10-01T04:00:00Z"`
-	UpdatedAt     time.Time `json:"-" db:"updated_at"`
-	LastMessageID *string   `json:"-" db:"last_message_id"`
-	LastMessage   *Message  `json:"last_message" db:"-"`
-	IsResumeRead  bool      `json:"is_resume_read" db:"is_resume_read"`
-	PostID        string    `json:"post_id" db:"post_id"`
-
-	Role           int            `json:"role" db:"-"`
+	CreatedAt      time.Time      `json:"created_at" db:"created_at" example:"2023-10-01T04:00:00Z"`
+	UpdatedAt      time.Time      `json:"-" db:"updated_at"`
+	LastMessageID  *string        `json:"-" db:"last_message_id"`
+	LastMessage    *Message       `json:"last_message" db:"-"`
+	PostID         *string        `json:"post_id" db:"post_id"`
+	Role           Role           `json:"role" db:"-"`
 	HireStatus     string         `json:"hire_status" db:"-"`
+	IsResumeRead   bool           `json:"is_resume_read" db:"-"`
 	ResumeSnapshot ResumeSnapshot `json:"resume_snapshot" db:"-"`
 }
+
+type Role int
+
+const (
+	RoleOfficial  Role = iota // 0: 官方
+	RoleRecruiter             // 1: 徵才方
+	RoleJobSeeker             // 2: 求職方
+)
 
 type MediaType int
 

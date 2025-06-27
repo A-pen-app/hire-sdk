@@ -224,6 +224,7 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 		snapshot_id,
 		post_id,
 		chat_id,
+		is_read,
 		created_at,
 		updated_at
 	FROM public.resume_relation
@@ -238,6 +239,7 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 		&relation.SnapshotID,
 		&relation.PostID,
 		&relation.ChatID,
+		&relation.IsRead,
 		&relation.CreatedAt,
 		&relation.UpdatedAt,
 	)

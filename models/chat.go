@@ -256,14 +256,14 @@ type AudienceForm struct {
 	MinSeniority *int     `json:"min_seniority,omitempty"`
 }
 
-type getOption struct {
+type GetOption struct {
 	status     ChatAnnotation
 	unreadOnly bool
 }
-type GetOption func(*getOption) error
+type GetOptionFunc func(*GetOption) error
 
-func ByStatus(status ChatAnnotation, unreadOnly bool) GetOption {
-	return func(opt *getOption) error {
+func ByStatus(status ChatAnnotation, unreadOnly bool) GetOptionFunc {
+	return func(opt *GetOption) error {
 		switch status {
 		case Todo, Done:
 			opt.status = status
@@ -276,16 +276,16 @@ func ByStatus(status ChatAnnotation, unreadOnly bool) GetOption {
 	}
 }
 
-type sendOption struct {
+type SendOption struct {
 	typ              MessageType
 	body             *string
 	mediaIDs         []string
 	replyToMessageID *string
 }
-type SendOption func(*sendOption) error
+type SendOptionFunc func(*SendOption) error
 
-func WithText(body string) SendOption {
-	return func(opt *sendOption) error {
+func WithText(body string) SendOptionFunc {
+	return func(opt *SendOption) error {
 		if opt.typ != MsgEmpty {
 			return errors.New("wrong parameters")
 		}
@@ -295,8 +295,8 @@ func WithText(body string) SendOption {
 	}
 }
 
-func WithMedia(mediaIDs []string) SendOption {
-	return func(opt *sendOption) error {
+func WithMedia(mediaIDs []string) SendOptionFunc {
+	return func(opt *SendOption) error {
 		if opt.typ != MsgEmpty {
 			return errors.New("wrong parameters")
 		}
@@ -306,8 +306,8 @@ func WithMedia(mediaIDs []string) SendOption {
 	}
 }
 
-func ReplyTo(replyToMessageID string) SendOption {
-	return func(opt *sendOption) error {
+func ReplyTo(replyToMessageID string) SendOptionFunc {
+	return func(opt *SendOption) error {
 		opt.replyToMessageID = &replyToMessageID
 		return nil
 	}

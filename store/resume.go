@@ -17,12 +17,13 @@ func NewResume(db *sqlx.DB) Resume {
 	return &resumeStore{db: db}
 }
 
-func (s *resumeStore) Create(ctx context.Context, userID string, content *models.ResumeContent) (*models.Resume, error) {
+func (s *resumeStore) Create(ctx context.Context, appID, userID string, content *models.ResumeContent) (*models.Resume, error) {
 	resumeID := uuid.New().String()
 	now := time.Now()
 	query := `
 	INSERT INTO public.resume (
 		id,
+		app_id,
 		user_id,
 		content,
 		created_at,
@@ -33,14 +34,15 @@ func (s *resumeStore) Create(ctx context.Context, userID string, content *models
 		?,
 		?,
 		?,
+		?,
 		?
 	)
 	`
 	query = s.db.Rebind(query)
 
-	var returnedID string
 	_, err := s.db.Exec(query,
 		resumeID,
+		appID,
 		userID,
 		content,
 		now,
@@ -51,7 +53,8 @@ func (s *resumeStore) Create(ctx context.Context, userID string, content *models
 	}
 
 	return &models.Resume{
-		ID:        returnedID,
+		ID:        resumeID,
+		AppID:     appID,
 		UserID:    userID,
 		Content:   content,
 		CreatedAt: now,
@@ -59,22 +62,24 @@ func (s *resumeStore) Create(ctx context.Context, userID string, content *models
 	}, nil
 }
 
-func (s *resumeStore) Get(ctx context.Context, userID string) (*models.Resume, error) {
+func (s *resumeStore) Get(ctx context.Context, appID, userID string) (*models.Resume, error) {
 	query := `
 	SELECT 
 		id,
+		app_id,
 		user_id,
 		content,
 		created_at,
 		updated_at
 	FROM public.resume 
-	WHERE user_id = ?
+	WHERE app_id = ? AND user_id = ?
 	`
 	query = s.db.Rebind(query)
 
 	var resume models.Resume
-	err := s.db.QueryRowx(query, userID).Scan(
+	err := s.db.QueryRowx(query, appID, userID).Scan(
 		&resume.ID,
+		&resume.AppID,
 		&resume.UserID,
 		&resume.Content,
 		&resume.CreatedAt,
@@ -87,16 +92,16 @@ func (s *resumeStore) Get(ctx context.Context, userID string) (*models.Resume, e
 	return &resume, nil
 }
 
-func (s *resumeStore) Update(ctx context.Context, userID string, content *models.ResumeContent) error {
+func (s *resumeStore) Update(ctx context.Context, appID, userID string, content *models.ResumeContent) error {
 	query := `
 	UPDATE public.resume 
 	SET	content = ?,
 		updated_at = ?
-	WHERE user_id = ?
+	WHERE app_id = ? AND user_id = ?
 	`
 	query = s.db.Rebind(query)
 
-	_, err := s.db.Exec(query, content, time.Now(), userID)
+	_, err := s.db.Exec(query, content, time.Now(), appID, userID)
 	if err != nil {
 		return err
 	}
@@ -104,11 +109,11 @@ func (s *resumeStore) Update(ctx context.Context, userID string, content *models
 	return nil
 }
 
-func (s *resumeStore) CreateSnapshot(ctx context.Context, userID string) (*models.ResumeSnapshot, error) {
+func (s *resumeStore) CreateSnapshot(ctx context.Context, appID, userID string) (*models.ResumeSnapshot, error) {
 	snapshotID := uuid.New().String()
 	now := time.Now()
 
-	resume, err := s.Get(ctx, userID)
+	resume, err := s.Get(ctx, appID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +126,6 @@ func (s *resumeStore) CreateSnapshot(ctx context.Context, userID string) (*model
 		created_at
 	)
 	VALUES (
-		?,
 		?,
 		?,
 		?,
@@ -174,13 +178,14 @@ func (s *resumeStore) GetSnapshot(ctx context.Context, snapshotID string) (*mode
 	return &snapshot, nil
 }
 
-func (s *resumeStore) CreateRelation(ctx context.Context, userID string, snapshotID string, chatID string, postID string) (*models.ResumeRelation, error) {
+func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, snapshotID string, chatID string, postID string) (*models.ResumeRelation, error) {
 	relationID := uuid.New().String()
 	now := time.Now()
 
 	query := `
 	INSERT INTO public.resume_relation (
 		id,
+		app_id,
 		user_id,
 		snapshot_id,
 		post_id,
@@ -195,18 +200,20 @@ func (s *resumeStore) CreateRelation(ctx context.Context, userID string, snapsho
 		?,
 		?,
 		?,
+		?,
 		?
 	)
 	`
 	query = s.db.Rebind(query)
 
-	_, err := s.db.Exec(query, relationID, userID, snapshotID, postID, chatID, now, now)
+	_, err := s.db.Exec(query, relationID, appID, userID, snapshotID, postID, chatID, now, now)
 	if err != nil {
 		return nil, err
 	}
 
 	return &models.ResumeRelation{
 		ID:         relationID,
+		AppID:      appID,
 		UserID:     userID,
 		SnapshotID: snapshotID,
 		PostID:     postID,
@@ -220,6 +227,7 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 	query := `
 	SELECT 
 		id,
+		app_id,
 		user_id,
 		snapshot_id,
 		post_id,
@@ -235,6 +243,7 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 	var relation models.ResumeRelation
 	err := s.db.QueryRowx(query, chatID).Scan(
 		&relation.ID,
+		&relation.AppID,
 		&relation.UserID,
 		&relation.SnapshotID,
 		&relation.PostID,

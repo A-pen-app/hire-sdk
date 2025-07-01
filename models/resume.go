@@ -72,6 +72,7 @@ const (
 
 type Resume struct {
 	ID        string         `json:"-" db:"id"`
+	AppID     string         `json:"-" db:"app_id"`
 	UserID    string         `json:"-" db:"user_id"`
 	Content   *ResumeContent `json:"content" db:"content"`
 	CreatedAt time.Time      `json:"-" db:"created_at"`
@@ -87,6 +88,7 @@ type ResumeSnapshot struct {
 
 type ResumeRelation struct {
 	ID         string    `json:"-" db:"id"`
+	AppID      string    `json:"-" db:"app_id"`
 	UserID     string    `json:"-" db:"user_id"`
 	SnapshotID string    `json:"-" db:"snapshot_id"`
 	PostID     string    `json:"-" db:"post_id"`

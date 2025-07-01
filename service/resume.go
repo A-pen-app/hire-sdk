@@ -18,15 +18,15 @@ func NewResume(store store.Resume) Resume {
 	}
 }
 
-func (s *resumeService) Patch(ctx context.Context, userID string, resume *models.ResumeContent) error {
-	return s.store.Update(ctx, userID, resume)
+func (s *resumeService) Patch(ctx context.Context, appID, userID string, resume *models.ResumeContent) error {
+	return s.store.Update(ctx, appID, userID, resume)
 }
 
-func (s *resumeService) Get(ctx context.Context, userID string) (*models.Resume, error) {
-	resume, err := s.store.Get(ctx, userID)
+func (s *resumeService) Get(ctx context.Context, appID, userID string) (*models.Resume, error) {
+	resume, err := s.store.Get(ctx, appID, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			resume, err = s.store.Create(ctx, userID, &models.ResumeContent{})
+			resume, err = s.store.Create(ctx, appID, userID, &models.ResumeContent{})
 			if err != nil {
 				return nil, err
 			}

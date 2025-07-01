@@ -22,13 +22,14 @@ func NewChat(db *sqlx.DB) Chat {
 	return &chatStore{db: db}
 }
 
-func (s *chatStore) Get(ctx context.Context, chatID, userID string) (*models.ChatRoom, error) {
+func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*models.ChatRoom, error) {
 	chat := models.ChatRoom{}
 	query := `
 	SELECT 
 		CT.chat_id, 
 		CT.sender_id, 
 		CT.receiver_id,
+		C.app_id,
 		C.last_message_id,
 		CT.unread_count,
 		CT.last_seen_at,
@@ -41,10 +42,11 @@ func (s *chatStore) Get(ctx context.Context, chatID, userID string) (*models.Cha
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
-	WHERE C.id=? AND CT.sender_id=?
+	WHERE C.id=? AND C.app_id=? AND CT.sender_id=?
 	`
 	values := []interface{}{
 		chatID,
+		appID,
 		userID,
 	}
 	query = s.db.Rebind(query)
@@ -88,19 +90,6 @@ func (s *chatStore) Read(ctx context.Context, userID, chatID string) error {
 		return err
 	}
 
-	// step 3: update user's total unread count
-	query = `
-	UPDATE public.user SET 
-		unread_count=GREATEST(unread_count-?, 0)
-	WHERE id=?
-	RETURNING unread_count AS new_value, (SELECT unread_count FROM public.user WHERE id=?) AS old_value`
-	query = s.db.Rebind(query)
-	oldUnreads := 0
-	newUnreads := 0
-	if err = tx.QueryRow(query, unreadCountInChat, userID, userID).Scan(&newUnreads, &oldUnreads); err != nil {
-		return err
-	}
-
 	if err := tx.Commit(); err != nil {
 		return err
 	}
@@ -122,7 +111,7 @@ func (s *chatStore) Annotate(ctx context.Context, chatID, userID string, status 
 	return nil
 }
 
-func (s *chatStore) GetChats(ctx context.Context, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool) ([]*models.ChatRoom, error) {
+func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool) ([]*models.ChatRoom, error) {
 	chats := []*models.ChatRoom{}
 	if next == "" {
 		// +2 seconds to prevent the last chat is created at almost the same time with getting chats
@@ -133,6 +122,7 @@ func (s *chatStore) GetChats(ctx context.Context, userID string, next string, co
 		CT.chat_id, 
 		CT.sender_id, 
 		CT.receiver_id,
+		C.app_id,
 		C.last_message_id,
 		CT.unread_count,
 		CT.last_seen_at,
@@ -145,16 +135,16 @@ func (s *chatStore) GetChats(ctx context.Context, userID string, next string, co
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
-	JOIN public.user AS U
-	ON CT.receiver_id=U.id
 	WHERE `
 	conditions := []string{
+		"C.app_id=?",
 		"CT.sender_id=?",
 		"C.updated_at<TO_TIMESTAMP(?)",
 		"CT.status!=?",
 		"CT.control_flag=?",
 	}
 	values := []interface{}{
+		appID,
 		userID,
 		next,
 		models.Deleted,
@@ -177,7 +167,7 @@ func (s *chatStore) GetChats(ctx context.Context, userID string, next string, co
 	return chats, nil
 }
 
-func (s *chatStore) GetChatID(ctx context.Context, postID, senderID, receiverID string) (string, error) {
+func (s *chatStore) GetChatID(ctx context.Context, appID, postID, senderID, receiverID string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -187,19 +177,20 @@ func (s *chatStore) GetChatID(ctx context.Context, postID, senderID, receiverID 
 	chatID := ""
 	// step 1: check if chat_id already exists
 	query := `
-	SELECT chat_id FROM public.chat_thread 
-	WHERE sender_id=? AND receiver_id=?
+	SELECT ct.chat_id FROM public.chat_thread ct
+	JOIN public.chat c ON ct.chat_id = c.id
+	WHERE c.app_id=? AND ct.sender_id=? AND ct.receiver_id=?
 	`
 	query = s.db.Rebind(query)
-	if err := tx.QueryRow(query, senderID, receiverID).Scan(&chatID); err == sql.ErrNoRows {
+	if err := tx.QueryRow(query, appID, senderID, receiverID).Scan(&chatID); err == sql.ErrNoRows {
 
 		chatID = uuid.New().String()
 		// step 2: create a new chat
 		query = `
-		INSERT INTO public.chat (id, post_id, created_at, updated_at)
-		VALUES (?, ?, now(), now())`
+		INSERT INTO public.chat (id, app_id, post_id, created_at, updated_at)
+		VALUES (?, ?, ?, now(), now())`
 		query = s.db.Rebind(query)
-		if _, err := tx.Exec(query, chatID, postID); err != nil {
+		if _, err := tx.Exec(query, chatID, appID, postID); err != nil {
 			return "", err
 		}
 
@@ -263,8 +254,6 @@ func (s *chatStore) AddMessages(ctx context.Context, userID, chatID, receiverID 
 		?,
 		?,
 		?,
-		?,
-		?,
 		?
 	)`
 	var msgID string
@@ -308,20 +297,6 @@ func (s *chatStore) AddMessages(ctx context.Context, userID, chatID, receiverID 
 	query = s.db.Rebind(query)
 	_, err = tx.Exec(query, n, models.NeverGotMessages, chatID, receiverID)
 	if err != nil {
-		return err
-	}
-
-	// step 4: update other's total unread count
-	query = `
-	UPDATE public.user SET 
-		unread_count=unread_count+?
-	WHERE id=?
-	RETURNING unread_count AS new_value, (SELECT unread_count FROM public.user WHERE id=?) AS old_value
-	`
-	query = s.db.Rebind(query)
-	oldUnreads := 0
-	newUnreads := 0
-	if err = tx.QueryRow(query, n, receiverID, receiverID).Scan(&newUnreads, &oldUnreads); err != nil {
 		return err
 	}
 
@@ -401,20 +376,6 @@ func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID s
 	query = s.db.Rebind(query)
 	_, err = tx.Exec(query, models.NeverGotMessages, chatID, receiverID)
 	if err != nil {
-		return "", err
-	}
-
-	// step 4: update other's total unread count
-	query = `
-	UPDATE public.user SET 
-		unread_count=unread_count+1 
-	WHERE id=?
-	RETURNING unread_count AS new_value, (SELECT unread_count FROM public.user WHERE id=?) AS old_value
-	`
-	query = s.db.Rebind(query)
-	oldUnreads := 0
-	newUnreads := 0
-	if err = tx.QueryRow(query, receiverID, receiverID).Scan(&newUnreads, &oldUnreads); err != nil {
 		return "", err
 	}
 

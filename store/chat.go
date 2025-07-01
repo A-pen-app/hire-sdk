@@ -225,7 +225,7 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, postID, senderID, rece
 
 }
 
-func (s *chatStore) AddMessages(ctx context.Context, appID, userID, chatID, receiverID string, msgs []*models.Message) error {
+func (s *chatStore) AddMessages(ctx context.Context, userID, chatID, receiverID string, msgs []*models.Message) error {
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
@@ -307,7 +307,7 @@ func (s *chatStore) AddMessages(ctx context.Context, appID, userID, chatID, rece
 	return nil
 }
 
-func (s *chatStore) AddMessage(ctx context.Context, appID, userID, chatID, receiverID string, typ models.MessageType, body *string, mediaIDs []string, replyToMessageID *string) (string, error) {
+func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID string, typ models.MessageType, body *string, mediaIDs []string, replyToMessageID *string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err

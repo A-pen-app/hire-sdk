@@ -257,8 +257,8 @@ type AudienceForm struct {
 }
 
 type GetOption struct {
-	status     ChatAnnotation
-	unreadOnly bool
+	Status     ChatAnnotation
+	UnreadOnly bool
 }
 type GetOptionFunc func(*GetOption) error
 
@@ -266,9 +266,9 @@ func ByStatus(status ChatAnnotation, unreadOnly bool) GetOptionFunc {
 	return func(opt *GetOption) error {
 		switch status {
 		case Todo, Done:
-			opt.status = status
+			opt.Status = status
 		case None:
-			opt.unreadOnly = unreadOnly
+			opt.UnreadOnly = unreadOnly
 		default:
 			return errors.New("action not allowed")
 		}
@@ -277,38 +277,38 @@ func ByStatus(status ChatAnnotation, unreadOnly bool) GetOptionFunc {
 }
 
 type SendOption struct {
-	typ              MessageType
-	body             *string
-	mediaIDs         []string
-	replyToMessageID *string
+	Type             MessageType
+	Body             *string
+	MediaIDs         []string
+	ReplyToMessageID *string
 }
 type SendOptionFunc func(*SendOption) error
 
 func WithText(body string) SendOptionFunc {
 	return func(opt *SendOption) error {
-		if opt.typ != MsgEmpty {
+		if opt.Type != MsgEmpty {
 			return errors.New("wrong parameters")
 		}
-		opt.typ = MsgText
-		opt.body = &body
+		opt.Type = MsgText
+		opt.Body = &body
 		return nil
 	}
 }
 
 func WithMedia(mediaIDs []string) SendOptionFunc {
 	return func(opt *SendOption) error {
-		if opt.typ != MsgEmpty {
+		if opt.Type != MsgEmpty {
 			return errors.New("wrong parameters")
 		}
-		opt.typ = MsgImage
-		opt.mediaIDs = mediaIDs
+		opt.Type = MsgImage
+		opt.MediaIDs = mediaIDs
 		return nil
 	}
 }
 
 func ReplyTo(replyToMessageID string) SendOptionFunc {
 	return func(opt *SendOption) error {
-		opt.replyToMessageID = &replyToMessageID
+		opt.ReplyToMessageID = &replyToMessageID
 		return nil
 	}
 }

@@ -170,7 +170,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 	return chats, nil
 }
 
-func (s *chatStore) GetChatID(ctx context.Context, appID, postID, senderID, receiverID string) (string, error) {
+func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -183,17 +183,28 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, postID, senderID, rece
 	SELECT ct.chat_id FROM public.chat_thread ct
 	JOIN public.chat c ON ct.chat_id = c.id
 	WHERE c.app_id=? AND ct.sender_id=? AND ct.receiver_id=?
+	  AND ((c.post_id IS NULL AND ? IS NULL) OR c.post_id=?)
 	`
 	query = s.db.Rebind(query)
-	if err := tx.QueryRow(query, appID, senderID, receiverID).Scan(&chatID); err == sql.ErrNoRows {
+	if err := tx.QueryRow(query, appID, senderID, receiverID, postID, postID).Scan(&chatID); err == sql.ErrNoRows {
 
 		chatID = uuid.New().String()
 		// step 2: create a new chat
-		query = `
-		INSERT INTO public.chat (id, app_id, post_id, created_at, updated_at)
-		VALUES (?, ?, ?, now(), now())`
-		query = s.db.Rebind(query)
-		if _, err := tx.Exec(query, chatID, appID, postID); err != nil {
+		var query2 string
+		var args []interface{}
+		if postID == nil {
+			query2 = `
+			INSERT INTO public.chat (id, app_id, created_at, updated_at)
+			VALUES (?, ?, now(), now())`
+			args = []interface{}{chatID, appID}
+		} else {
+			query2 = `
+			INSERT INTO public.chat (id, app_id, post_id, created_at, updated_at)
+			VALUES (?, ?, ?, now(), now())`
+			args = []interface{}{chatID, appID, *postID}
+		}
+		query2 = s.db.Rebind(query2)
+		if _, err := tx.Exec(query2, args...); err != nil {
 			return "", err
 		}
 

@@ -321,7 +321,7 @@ func (s *chatStore) AddMessages(ctx context.Context, userID, chatID, receiverID 
 	return nil
 }
 
-func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID string, typ models.MessageType, body *string, mediaIDs []string, replyToMessageID *string) (string, error) {
+func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID string, typ models.MessageType, body *string, mediaIDs []string, replyToMessageID *string, referenceID *string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -340,7 +340,8 @@ func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID s
 		created_at,
 		reply_to_message_id,
 		status,
-		media_ids
+		media_ids,
+		reference_id
 	)
 	VALUES (
 		?,
@@ -349,6 +350,7 @@ func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID s
 		?,
 		?,
 		now(),
+		?,
 		?,
 		?,
 		?
@@ -364,6 +366,7 @@ func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID s
 		replyToMessageID,
 		models.Normal,
 		pq.Array(mediaIDs),
+		referenceID,
 	)
 	if err != nil {
 		return "", err
@@ -423,7 +426,8 @@ func (s *chatStore) GetMessage(ctx context.Context, messageID string) (*models.M
 		created_at, 
 		reply_to_message_id, 
 		status, 
-		media_ids
+		media_ids,
+		reference_id
 	FROM public.message WHERE id=?`
 	query = s.db.Rebind(query)
 	if err := s.db.QueryRowx(query, messageID).Scan(
@@ -436,6 +440,7 @@ func (s *chatStore) GetMessage(ctx context.Context, messageID string) (*models.M
 		&msg.ReplyToMessageID,
 		&msg.Status,
 		pq.Array(&msg.MediaIDs), // workaround for postgres array type
+		&msg.RefID,
 	); err != nil {
 		return nil, err
 	}
@@ -455,7 +460,8 @@ func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after tim
 		created_at,
 		reply_to_message_id,
 		status,
-		media_ids
+		media_ids,
+		reference_id	
 	FROM public.message
 	WHERE chat_id=? AND created_at>?
 	ORDER BY created_at DESC
@@ -484,6 +490,7 @@ func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after tim
 			&msg.ReplyToMessageID,
 			&msg.Status,
 			pq.Array(&msg.MediaIDs), // workaround for postgres array type
+			&msg.RefID,
 		); err != nil {
 			continue
 		}
@@ -509,7 +516,8 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 		created_at,
 		reply_to_message_id,
 		status,
-		media_ids
+		media_ids,
+		reference_id
 	FROM public.message
 	WHERE chat_id=? AND created_at<TO_TIMESTAMP(?)
 	ORDER BY created_at DESC
@@ -540,6 +548,7 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 			&msg.ReplyToMessageID,
 			&msg.Status,
 			pq.Array(&msg.MediaIDs), // workaround for postgres array type
+			&msg.RefID,
 		); err != nil {
 			continue
 		}

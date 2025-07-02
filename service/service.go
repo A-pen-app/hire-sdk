@@ -11,3 +11,10 @@ type Resume interface {
 	Get(ctx context.Context, bundleID, userID string) (*models.Resume, error)
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error)
 }
+
+type Chat interface {
+	New(ctx context.Context, bundleID, senderID, receiverID string, postID *string, resume *models.ResumeContent) (string, error)
+	Get(ctx context.Context, bundleID, chatID, userID string) (*models.ChatRoom, error)
+	GetChats(ctx context.Context, bundleID, userID string, next string, count int, options ...models.GetOptionFunc) ([]*models.ChatRoom, string, error)
+	GetChatMessages(ctx context.Context, bundleID, userID, chatID string, next string, count int) ([]*models.Message, string, error)
+}

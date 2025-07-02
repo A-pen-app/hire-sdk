@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/A-pen-app/hire-sdk/models"
+	"github.com/A-pen-app/logging"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -49,6 +50,7 @@ func (s *resumeStore) Create(ctx context.Context, appID, userID string, content 
 		now,
 	)
 	if err != nil {
+		logging.Errorw(ctx, "failed to create resume", "err", err, "appID", appID, "userID", userID)
 		return nil, err
 	}
 
@@ -86,6 +88,7 @@ func (s *resumeStore) Get(ctx context.Context, appID, userID string) (*models.Re
 		&resume.UpdatedAt,
 	)
 	if err != nil {
+		logging.Errorw(ctx, "failed to get resume", "err", err, "appID", appID, "userID", userID)
 		return nil, err
 	}
 
@@ -103,6 +106,7 @@ func (s *resumeStore) Update(ctx context.Context, appID, userID string, content 
 
 	_, err := s.db.Exec(query, content, time.Now(), appID, userID)
 	if err != nil {
+		logging.Errorw(ctx, "failed to update resume", "err", err, "appID", appID, "userID", userID)
 		return err
 	}
 
@@ -115,6 +119,7 @@ func (s *resumeStore) CreateSnapshot(ctx context.Context, appID, userID string) 
 
 	resume, err := s.Get(ctx, appID, userID)
 	if err != nil {
+		logging.Errorw(ctx, "failed to get resume for snapshot", "err", err, "appID", appID, "userID", userID)
 		return nil, err
 	}
 
@@ -141,6 +146,7 @@ func (s *resumeStore) CreateSnapshot(ctx context.Context, appID, userID string) 
 		now,
 	)
 	if err != nil {
+		logging.Errorw(ctx, "failed to create resume snapshot", "err", err, "snapshotID", snapshotID, "resumeID", resume.ID)
 		return nil, err
 	}
 
@@ -172,6 +178,7 @@ func (s *resumeStore) GetSnapshot(ctx context.Context, snapshotID string) (*mode
 		&snapshot.CreatedAt,
 	)
 	if err != nil {
+		logging.Errorw(ctx, "failed to get resume snapshot", "err", err, "snapshotID", snapshotID)
 		return nil, err
 	}
 
@@ -208,6 +215,7 @@ func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, 
 
 	_, err := s.db.Exec(query, relationID, appID, userID, snapshotID, postID, chatID, now, now)
 	if err != nil {
+		logging.Errorw(ctx, "failed to create resume relation", "err", err, "snapshotID", snapshotID, "chatID", chatID, "postID", postID)
 		return nil, err
 	}
 
@@ -253,6 +261,7 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 		&relation.UpdatedAt,
 	)
 	if err != nil {
+		logging.Errorw(ctx, "failed to get resume relation", "err", err, "chatID", chatID)
 		return nil, err
 	}
 

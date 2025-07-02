@@ -38,19 +38,23 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 			return "", models.ErrorWrongParams
 		}
 
+		// Update the user's resume
 		if err := s.r.Update(ctx, app.ID, senderID, resume); err != nil {
 			return "", err
 		}
 
+		// Create a snapshot of the updated resume
 		snapshot, err := s.r.CreateSnapshot(ctx, app.ID, senderID)
 		if err != nil {
 			return "", err
 		}
 
+		// Create a relation between the resume snapshot and the chat room
 		if _, err := s.r.CreateRelation(ctx, app.ID, senderID, snapshot.ID, chatID, *postID); err != nil {
 			return "", err
 		}
 
+		// Add a message indicating a post has been sent
 		if _, err := s.c.AddMessage(ctx, senderID, chatID, receiverID, models.MsgPost, nil, nil, nil, postID); err != nil {
 			return "", err
 		}

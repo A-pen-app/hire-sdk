@@ -75,18 +75,20 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 		return nil, err
 	}
 
-	relation, err := s.r.GetRelation(ctx, chatID)
-	if err != nil {
-		return nil, err
-	}
+	if chat.PostID != nil {
+		relation, err := s.r.GetRelation(ctx, chatID)
+		if err != nil {
+			return nil, err
+		}
 
-	snapshot, err := s.r.GetSnapshot(ctx, relation.SnapshotID)
-	if err != nil {
-		return nil, err
-	}
+		snapshot, err := s.r.GetSnapshot(ctx, relation.SnapshotID)
+		if err != nil {
+			return nil, err
+		}
 
-	chat.ResumeSnapshot = *snapshot
-	chat.IsResumeRead = relation.IsRead
+		chat.ResumeSnapshot = *snapshot
+		chat.IsResumeRead = relation.IsRead
+	}
 
 	return chat, nil
 }
@@ -114,18 +116,20 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 	}
 
 	for i := range chats {
-		relation, err := s.r.GetRelation(ctx, chats[i].ChatID)
-		if err != nil {
-			continue
-		}
+		if chats[i].PostID != nil {
+			relation, err := s.r.GetRelation(ctx, chats[i].ChatID)
+			if err != nil {
+				continue
+			}
 
-		snapshot, err := s.r.GetSnapshot(ctx, relation.SnapshotID)
-		if err != nil {
-			continue
-		}
+			snapshot, err := s.r.GetSnapshot(ctx, relation.SnapshotID)
+			if err != nil {
+				continue
+			}
 
-		chats[i].ResumeSnapshot = *snapshot
-		chats[i].IsResumeRead = relation.IsRead
+			chats[i].ResumeSnapshot = *snapshot
+			chats[i].IsResumeRead = relation.IsRead
+		}
 	}
 
 	next = ""

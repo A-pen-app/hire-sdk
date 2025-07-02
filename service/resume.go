@@ -9,24 +9,36 @@ import (
 )
 
 type resumeService struct {
-	store store.Resume
+	r store.Resume
+	a store.App
 }
 
-func NewResume(store store.Resume) Resume {
+func NewResume(r store.Resume) Resume {
 	return &resumeService{
-		store: store,
+		r: r,
 	}
 }
 
-func (s *resumeService) Patch(ctx context.Context, appID, userID string, resume *models.ResumeContent) error {
-	return s.store.Update(ctx, appID, userID, resume)
+func (s *resumeService) Patch(ctx context.Context, bundleID, userID string, resume *models.ResumeContent) error {
+
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		return err
+	}
+
+	return s.r.Update(ctx, app.ID, userID, resume)
 }
 
-func (s *resumeService) Get(ctx context.Context, appID, userID string) (*models.Resume, error) {
-	resume, err := s.store.Get(ctx, appID, userID)
+func (s *resumeService) Get(ctx context.Context, bundleID, userID string) (*models.Resume, error) {
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		return nil, err
+	}
+
+	resume, err := s.r.Get(ctx, app.ID, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			resume, err = s.store.Create(ctx, appID, userID, &models.ResumeContent{})
+			resume, err = s.r.Create(ctx, app.ID, userID, &models.ResumeContent{})
 			if err != nil {
 				return nil, err
 			}
@@ -38,5 +50,5 @@ func (s *resumeService) Get(ctx context.Context, appID, userID string) (*models.
 }
 
 func (s *resumeService) GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error) {
-	return s.store.GetSnapshot(ctx, snapshotID)
+	return s.r.GetSnapshot(ctx, snapshotID)
 }

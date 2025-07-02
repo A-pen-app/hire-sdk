@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/A-pen-app/hire-sdk/models"
+	"github.com/A-pen-app/logging"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -27,6 +28,7 @@ func (a *appStore) GetByBundleID(ctx context.Context, bundleID string) (*models.
 
 	err := a.db.QueryRowxContext(ctx, query, bundleID).StructScan(&app)
 	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
 		return nil, err
 	}
 

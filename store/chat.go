@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/A-pen-app/hire-sdk/models"
+	"github.com/A-pen-app/logging"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
@@ -51,6 +52,7 @@ func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*mod
 	}
 	query = s.db.Rebind(query)
 	if err := s.db.QueryRowx(query, values...).StructScan(&chat); err != nil {
+		logging.Errorw(ctx, "get chat thread failed", "err", err, "chatID", chatID, "appID", appID, "userID", userID)
 		return nil, err
 	}
 	return &chat, nil
@@ -60,6 +62,7 @@ func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*mod
 func (s *chatStore) Read(ctx context.Context, userID, chatID string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		logging.Errorw(ctx, "begin tx failed", "err", err)
 		return err
 	}
 	defer tx.Rollback()
@@ -72,6 +75,7 @@ func (s *chatStore) Read(ctx context.Context, userID, chatID string) error {
 	`
 	query = s.db.Rebind(query)
 	if _, err := tx.Exec(query, chatID, userID); err != nil {
+		logging.Errorw(ctx, "read chat thread failed", "err", err, "chatID", chatID, "userID", userID)
 		return err
 	}
 
@@ -87,10 +91,12 @@ func (s *chatStore) Read(ctx context.Context, userID, chatID string) error {
 	query = s.db.Rebind(query)
 	unreadCountInChat := 0
 	if err := tx.QueryRow(query, chatID, userID, chatID, userID).Scan(&unreadCountInChat); err != nil {
+		logging.Errorw(ctx, "update unread_count failed", "err", err, "chatID", chatID, "userID", userID)
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
+		logging.Errorw(ctx, "commit tx failed", "err", err)
 		return err
 	}
 
@@ -105,6 +111,7 @@ func (s *chatStore) Annotate(ctx context.Context, chatID, userID string, status 
 	`
 	query = s.db.Rebind(query)
 	if _, err := s.db.Exec(query, status, chatID, userID); err != nil {
+		logging.Errorw(ctx, "annotate chat thread failed", "err", err, "chatID", chatID, "userID", userID)
 		return err
 	}
 
@@ -165,6 +172,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 
 	query = s.db.Rebind(query)
 	if err := s.db.Select(&chats, query, values...); err != nil {
+		logging.Errorw(ctx, "get chat thread list failed", "err", err, "appID", appID, "userID", userID, "count", count)
 		return nil, err
 	}
 	return chats, nil
@@ -173,6 +181,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		logging.Errorw(ctx, "begin tx failed", "err", err)
 		return "", err
 	}
 	defer tx.Rollback()
@@ -205,6 +214,7 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		}
 		query2 = s.db.Rebind(query2)
 		if _, err := tx.Exec(query2, args...); err != nil {
+			logging.Errorw(ctx, "insert new chat failed", "err", err, "senderID", senderID, "receiverID", receiverID)
 			return "", err
 		}
 
@@ -215,6 +225,7 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		`
 		query = s.db.Rebind(query)
 		if _, err := tx.Exec(query, chatID, senderID, receiverID, models.NeverGotMessages); err != nil {
+			logging.Errorw(ctx, "insert new chat thread failed", "err", err, "senderID", senderID, "receiverID", receiverID)
 			return "", err
 		}
 
@@ -224,14 +235,17 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		`
 		query = s.db.Rebind(query)
 		if _, err := tx.Exec(query, chatID, receiverID, senderID, models.NeverGotMessages); err != nil {
+			logging.Errorw(ctx, "insert new chat thread (reversed) failed", "err", err, "senderID", receiverID, "receiverID", senderID)
 			return "", err
 		}
 
 	} else if err != nil {
+		logging.Errorw(ctx, "get existing chat ID failed", "err", err, "appID", appID, "senderID", senderID, "receiverID", receiverID)
 		return "", err
 	}
 
 	if err := tx.Commit(); err != nil {
+		logging.Errorw(ctx, "commit tx failed", "err", err)
 		return "", err
 	}
 
@@ -242,6 +256,7 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 func (s *chatStore) AddMessages(ctx context.Context, userID, chatID, receiverID string, msgs []*models.Message) error {
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {
+		logging.Errorw(ctx, "begin tx failed", "err", err)
 		return err
 	}
 	defer tx.Rollback()
@@ -285,6 +300,7 @@ func (s *chatStore) AddMessages(ctx context.Context, userID, chatID, receiverID 
 			models.Normal,
 			pq.Array(msgs[i].MediaIDs),
 		); err != nil {
+			logging.Errorw(ctx, "insert new message failed", "err", err, "chatID", chatID, "userID", userID)
 			return err
 		}
 	}
@@ -299,6 +315,7 @@ func (s *chatStore) AddMessages(ctx context.Context, userID, chatID, receiverID 
 	query = s.db.Rebind(query)
 	_, err = tx.Exec(query, msgID, chatID)
 	if err != nil {
+		logging.Errorw(ctx, "update last message failed", "err", err, "chat_id", chatID)
 		return err
 	}
 
@@ -311,19 +328,22 @@ func (s *chatStore) AddMessages(ctx context.Context, userID, chatID, receiverID 
 	query = s.db.Rebind(query)
 	_, err = tx.Exec(query, n, models.NeverGotMessages, chatID, receiverID)
 	if err != nil {
+		logging.Errorw(ctx, "update unread_count failed", "err", err, "chat_id", chatID, "receiver_id", receiverID, "count", n)
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
+		logging.Errorw(ctx, "commit tx failed", "err", err)
 		return err
 	}
 
 	return nil
 }
 
-func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID string, typ models.MessageType, body *string, mediaIDs []string, replyToMessageID *string) (string, error) {
+func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID string, typ models.MessageType, body *string, mediaIDs []string, replyToMessageID *string, referenceID *string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		logging.Errorw(ctx, "begin tx failed", "err", err)
 		return "", err
 	}
 	defer tx.Rollback()
@@ -340,7 +360,8 @@ func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID s
 		created_at,
 		reply_to_message_id,
 		status,
-		media_ids
+		media_ids,
+		reference_id
 	)
 	VALUES (
 		?,
@@ -349,6 +370,7 @@ func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID s
 		?,
 		?,
 		now(),
+		?,
 		?,
 		?,
 		?
@@ -364,8 +386,10 @@ func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID s
 		replyToMessageID,
 		models.Normal,
 		pq.Array(mediaIDs),
+		referenceID,
 	)
 	if err != nil {
+		logging.Errorw(ctx, "insert new message failed", "err", err, "chat_id", chatID)
 		return "", err
 	}
 
@@ -378,6 +402,7 @@ func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID s
 	query = s.db.Rebind(query)
 	_, err = tx.Exec(query, msgID, chatID)
 	if err != nil {
+		logging.Errorw(ctx, "update last message failed", "err", err, "chat_id", chatID)
 		return "", err
 	}
 
@@ -390,13 +415,14 @@ func (s *chatStore) AddMessage(ctx context.Context, userID, chatID, receiverID s
 	query = s.db.Rebind(query)
 	_, err = tx.Exec(query, models.NeverGotMessages, chatID, receiverID)
 	if err != nil {
+		logging.Errorw(ctx, "update unread_count failed", "err", err, "chat_id", chatID, "receiver_id", receiverID)
 		return "", err
 	}
 
 	if err := tx.Commit(); err != nil {
+		logging.Errorw(ctx, "commit tx failed", "err", err)
 		return "", err
 	}
-
 	return msgID, nil
 }
 
@@ -406,6 +432,7 @@ func (s *chatStore) EditMessage(ctx context.Context, messageID string, newStatus
 	`
 	query = s.db.Rebind(query)
 	if _, err := s.db.Exec(query, newStatus, messageID); err != nil {
+		logging.Errorw(ctx, "update message status failed", "err", err, "messageID", messageID, "status", newStatus.String())
 		return err
 	}
 	return nil
@@ -423,7 +450,8 @@ func (s *chatStore) GetMessage(ctx context.Context, messageID string) (*models.M
 		created_at, 
 		reply_to_message_id, 
 		status, 
-		media_ids
+		media_ids,
+		reference_id
 	FROM public.message WHERE id=?`
 	query = s.db.Rebind(query)
 	if err := s.db.QueryRowx(query, messageID).Scan(
@@ -436,7 +464,9 @@ func (s *chatStore) GetMessage(ctx context.Context, messageID string) (*models.M
 		&msg.ReplyToMessageID,
 		&msg.Status,
 		pq.Array(&msg.MediaIDs), // workaround for postgres array type
+		&msg.RefID,
 	); err != nil {
+		logging.Errorw(ctx, "get message failed", "err", err, "messageID", messageID)
 		return nil, err
 	}
 
@@ -455,7 +485,8 @@ func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after tim
 		created_at,
 		reply_to_message_id,
 		status,
-		media_ids
+		media_ids,
+		reference_id	
 	FROM public.message
 	WHERE chat_id=? AND created_at>?
 	ORDER BY created_at DESC
@@ -467,6 +498,7 @@ func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after tim
 	query = s.db.Rebind(query)
 	rows, err := s.db.Queryx(query, values...)
 	if err != nil {
+		logging.Errorw(ctx, "get new messages failed", "err", err, "chatID", chatID, "after", after)
 		return nil, err
 	}
 	defer rows.Close()
@@ -484,7 +516,9 @@ func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after tim
 			&msg.ReplyToMessageID,
 			&msg.Status,
 			pq.Array(&msg.MediaIDs), // workaround for postgres array type
+			&msg.RefID,
 		); err != nil {
+			logging.Errorw(ctx, "scan message failed", "err", err, "chatID", chatID)
 			continue
 		}
 		msgs = append(msgs, &msg)
@@ -509,7 +543,8 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 		created_at,
 		reply_to_message_id,
 		status,
-		media_ids
+		media_ids,
+		reference_id
 	FROM public.message
 	WHERE chat_id=? AND created_at<TO_TIMESTAMP(?)
 	ORDER BY created_at DESC
@@ -523,6 +558,7 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 	query = s.db.Rebind(query)
 	rows, err := s.db.Queryx(query, values...)
 	if err != nil {
+		logging.Errorw(ctx, "get messages failed", "err", err, "chatID", chatID)
 		return nil, err
 	}
 	defer rows.Close()
@@ -540,7 +576,9 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 			&msg.ReplyToMessageID,
 			&msg.Status,
 			pq.Array(&msg.MediaIDs), // workaround for postgres array type
+			&msg.RefID,
 		); err != nil {
+			logging.Errorw(ctx, "scan message failed", "err", err, "chatID", chatID)
 			continue
 		}
 		msgs = append(msgs, &msg)

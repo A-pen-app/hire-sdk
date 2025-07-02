@@ -133,7 +133,7 @@ type Message struct {
 	// output-only fields, injected from other table
 	// for Type=MsgForm, it stands for form_id
 	// for Type=MsgMeetup, it stands for meetup_id
-	RefID *string `json:"reference_id,omitempty" db:"-" example:"ce465117-1c0a-4746-8500-e4fb2c960f70"`
+	RefID *string `json:"reference_id,omitempty" db:"reference_id" example:"ce465117-1c0a-4746-8500-e4fb2c960f70"`
 
 	// Type=MsgForm, MsgMeetup
 	Title     *string `json:"title,omitempty" db:"-" example:"問卷標題"`

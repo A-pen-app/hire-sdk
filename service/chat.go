@@ -84,6 +84,15 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 		return nil, err
 	}
 
+	if msgID := chat.LastMessageID; msgID != nil {
+		msg, err := s.aggregateLastMessage(ctx, userID, *msgID, false)
+		if err != nil {
+			logging.Errorw(ctx, "aggregate last message failed", "err", err, "msgID", *msgID)
+		} else {
+			chat.LastMessage = msg
+		}
+	}
+
 	if chat.PostID != nil {
 		relation, err := s.r.GetRelation(ctx, chatID)
 		if err != nil {
@@ -130,6 +139,15 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 	}
 
 	for i := range chats {
+		if msgID := chats[i].LastMessageID; msgID != nil {
+			msg, err := s.aggregateLastMessage(ctx, userID, *msgID, true)
+			if err != nil {
+				logging.Errorw(ctx, "aggregate last message failed", "err", err, "msgID", *msgID)
+			} else {
+				chats[i].LastMessage = msg
+			}
+		}
+
 		if chats[i].PostID != nil {
 			relation, err := s.r.GetRelation(ctx, chats[i].ChatID)
 			if err != nil {
@@ -195,6 +213,81 @@ func (s *chatService) GetChatMessages(ctx context.Context, bundleID, userID, cha
 	}
 
 	return msgs[:n], next, nil
+}
+
+// aggregateLastMessage processes the last message with business logic (without user info)
+func (s *chatService) aggregateLastMessage(ctx context.Context, userID string, msgID string, isInjectContent bool) (*models.Message, error) {
+	msg, err := s.c.GetMessage(ctx, msgID)
+	if err != nil {
+		logging.Errorw(ctx, "get last message failed", "err", err, "msgID", msgID)
+		return nil, err
+	}
+
+	status := msg.Status
+	switch {
+	case status.HasOneOf(models.DeletedBySender) && userID == msg.SenderID,
+		status.HasOneOf(models.DeletedByReceiver) && userID != msg.SenderID,
+		status.HasOneOf(models.Unsent):
+		return nil, nil
+	default:
+		msg.Status = models.Normal
+	}
+
+	if isInjectContent {
+		if err := s.injectContent(ctx, userID, msg, false); err != nil {
+			logging.Errorw(ctx, "inject content to message failed", "err", err, "msgID", msgID, "userID", userID)
+			return nil, err
+		}
+	}
+
+	return msg, nil
+}
+
+// injectContent processes message content based on type and handles reply messages (without user info)
+func (s *chatService) injectContent(ctx context.Context, userID string, msg *models.Message, injectReplyTo bool) error {
+	switch msg.Type {
+	case models.MsgText:
+		if msg.Body == nil {
+			emptyString := ""
+			msg.Body = &emptyString
+		}
+	case models.MsgImage:
+		//TODO: inject image
+	case models.MsgForm:
+		//TODO: inject form
+	case models.MsgMeetup:
+		//TODO: inject meetup
+	}
+
+	if injectReplyTo && msg.ReplyToMessageID != nil {
+		replyMsg, err := s.c.GetMessage(ctx, *msg.ReplyToMessageID)
+		if err != nil {
+			return err
+		}
+		status := replyMsg.Status
+		switch {
+		case status.HasOneOf(models.DeletedBySender) && userID == replyMsg.SenderID,
+			status.HasOneOf(models.DeletedByReceiver) && userID != replyMsg.SenderID,
+			status.HasOneOf(models.Unsent):
+
+			// user deleted/unsent this message, mark it as unavailable
+			replyMsg.Status = models.Unavailable
+
+			// wipe out message content for unsent
+			replyMsg.Body = nil
+			replyMsg.MediaIDs = nil
+			replyMsg.Type = models.MsgEmpty
+		default:
+			replyMsg.Status = models.Normal
+		}
+
+		if err := s.injectContent(ctx, userID, replyMsg, false); err != nil {
+			return err
+		}
+
+		msg.ReplyTo = replyMsg
+	}
+	return nil
 }
 
 func (s *chatService) aggregateMessages(ctx context.Context, userID string, nonFilteredMsgs []*models.Message) []*models.Message {

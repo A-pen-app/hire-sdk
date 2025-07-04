@@ -132,7 +132,7 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 		}
 	}
 
-	chats, err := s.c.GetChats(ctx, app.ID, userID, next, count+1, opt.Status, opt.UnreadOnly, false)
+	chats, err := s.c.GetChats(ctx, app.ID, userID, next, count+1, opt.Status, opt.UnreadOnly)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get chats", "err", err, "appID", app.ID, "userID", userID)
 		return nil, "", err

@@ -13,13 +13,15 @@ type chatService struct {
 	c store.Chat
 	r store.Resume
 	a store.App
+	m store.Media
 }
 
-func NewChat(c store.Chat, r store.Resume, a store.App) Chat {
+func NewChat(c store.Chat, r store.Resume, a store.App, m store.Media) Chat {
 	return &chatService{
 		c: c,
 		r: r,
 		a: a,
+		m: m,
 	}
 }
 
@@ -328,8 +330,12 @@ func (s *chatService) injectContent(ctx context.Context, userID string, msg *mod
 			emptyString := ""
 			msg.Body = &emptyString
 		}
-	case models.MsgImage:
-		//TODO: inject image
+	case models.MsgImage, models.MsgFile:
+		media, err := s.m.Get(ctx, msg.MediaIDs)
+		if err != nil {
+			return err
+		}
+		msg.Medias = media
 	case models.MsgForm:
 		//TODO: inject form
 	case models.MsgMeetup:

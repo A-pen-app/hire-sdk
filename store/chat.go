@@ -118,7 +118,22 @@ func (s *chatStore) Annotate(ctx context.Context, chatID, userID string, status 
 	return nil
 }
 
-func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, pinnedOnly bool) ([]*models.ChatRoom, error) {
+func (s *chatStore) Pin(ctx context.Context, chatID, userID string, isPinned bool) error {
+	query := `
+	UPDATE public.chat_thread
+	SET is_pinned=?
+	WHERE chat_id=? AND sender_id=?
+	`
+	query = s.db.Rebind(query)
+	if _, err := s.db.Exec(query, isPinned, chatID, userID); err != nil {
+		logging.Errorw(ctx, "pin chat thread failed", "err", err, "chatID", chatID, "userID", userID, "isPinned", isPinned)
+		return err
+	}
+
+	return nil
+}
+
+func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool) ([]*models.ChatRoom, error) {
 	chats := []*models.ChatRoom{}
 	if next == "" {
 		// +2 seconds to prevent the last chat is created at almost the same time with getting chats
@@ -164,10 +179,8 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 	if unreadOnly {
 		conditions = append(conditions, "CT.unread_count>0")
 	}
-	if pinnedOnly {
-		conditions = append(conditions, "CT.is_pinned=true")
-	}
-	query = query + strings.Join(conditions, " AND ") + " ORDER BY C.updated_at DESC LIMIT ?"
+
+	query = query + strings.Join(conditions, " AND ") + " ORDER BY C.post_id IS NULL DESC, CT.is_pinned DESC, C.updated_at DESC LIMIT ?"
 	values = append(values, count)
 
 	query = s.db.Rebind(query)

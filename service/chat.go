@@ -215,6 +215,83 @@ func (s *chatService) GetChatMessages(ctx context.Context, bundleID, userID, cha
 	return msgs[:n], next, nil
 }
 
+func (s *chatService) SendMessage(ctx context.Context, bundleID, userID, chatID string, options ...models.SendOptionFunc) (*models.Message, error) {
+	params := models.SendOption{}
+	for _, optionFunc := range options {
+		if err := optionFunc(&params); err != nil {
+			logging.Errorw(ctx, "build send option failed", "err", err)
+			return nil, err
+		}
+	}
+
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return nil, err
+	}
+
+	chat, err := s.c.Get(ctx, app.ID, chatID, userID)
+	if err != nil {
+		logging.Errorw(ctx, "get chat failed", "err", err, "user_id", userID, "chat_id", chatID)
+		return nil, err
+	}
+
+	msgID, err := s.c.AddMessage(ctx, userID, chatID, chat.ReceiverID, params.Type, params.Body, params.MediaIDs, params.ReplyToMessageID, nil)
+	if err != nil {
+		logging.Errorw(ctx, "create new message failed", "err", err, "user_id", userID, "chat_id", chatID)
+		return nil, err
+	}
+
+	msg, err := s.c.GetMessage(ctx, msgID)
+	if err != nil {
+		logging.Errorw(ctx, "get message failed", "err", err, "message_id", msgID)
+		return nil, err
+	}
+	s.injectContent(ctx, userID, msg, true)
+
+	return msg, nil
+}
+
+func (s *chatService) UnsendMessage(ctx context.Context, bundleID, userID, messageID string) error {
+
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return err
+	}
+
+	msg, err := s.c.GetMessage(ctx, messageID)
+	if err != nil {
+		return err
+	}
+
+	chat, err := s.c.Get(ctx, app.ID, msg.ChatID, userID)
+	if err != nil {
+		logging.Errorw(ctx, "get chat failed", "err", err, "user_id", userID, "chat_id", msg.ChatID)
+		return err
+	}
+
+	// check ownership
+	if chat.AppID != app.ID || msg.SenderID != userID {
+		return models.ErrorNotAllowed
+	}
+	// make this function idempotent
+	if msg.Status.HasOneOf(models.Unsent | models.DeletedBySender) {
+		return nil
+	}
+
+	if msg.Status != models.Normal {
+		return models.ErrorNotAllowed
+	}
+
+	if err := s.c.EditMessage(ctx, messageID, models.Unsent); err != nil {
+		logging.Errorw(ctx, "edit message failed", "err", err, "message_id", messageID)
+		return err
+	}
+
+	return nil
+}
+
 // aggregateLastMessage processes the last message with business logic (without user info)
 func (s *chatService) aggregateLastMessage(ctx context.Context, userID string, msgID string, isInjectContent bool) (*models.Message, error) {
 	msg, err := s.c.GetMessage(ctx, msgID)

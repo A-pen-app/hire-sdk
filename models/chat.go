@@ -214,30 +214,6 @@ const (
 	RoleJobSeeker             // 2: 求職方
 )
 
-type MediaType int
-
-const (
-	Image MediaType = iota + 1
-	Audio
-	Video
-	File
-)
-
-type Media struct {
-	ID         string  `json:"-" `
-	URL        string  `json:"url"`
-	PreviewURL *string `json:"preview_url"`
-
-	Placeholder *string   `json:"placeholder,omitempty"`
-	Type        MediaType `json:"type"`
-
-	// indicate the url to connect when user click the media
-	RedirectURL *string    `json:"redirect_url,omitempty"`
-	Title       *string    `json:"title,omitempty"`
-	Size        *int64     `json:"size,omitempty"`
-	ExpiredAt   *time.Time `json:"expired_at,omitempty"`
-}
-
 type DisplayUser struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`

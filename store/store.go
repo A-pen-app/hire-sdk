@@ -36,3 +36,8 @@ type Chat interface {
 type App interface {
 	GetByBundleID(ctx context.Context, bundleID string) (*models.App, error)
 }
+
+type Media interface {
+	Get(ctx context.Context, mediaIDs []string) ([]*models.Media, error)
+	New(ctx context.Context, upload *models.MediaUpload) (string, error)
+}

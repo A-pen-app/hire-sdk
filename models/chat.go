@@ -232,7 +232,7 @@ type DisplayUser struct {
 	Name      string  `json:"name"`
 	Picture   string  `json:"picture"`
 	Gender    string  `json:"gender"`
-	Character string  `json:"-"`
+	Character *string `json:"-"`
 	PushToken *string `json:"-"`
 }
 

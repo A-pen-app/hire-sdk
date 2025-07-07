@@ -15,7 +15,7 @@ type Resume interface {
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error)
 	CreateRelation(ctx context.Context, appID, userID string, snapshotID string, chatID string, postID string) (*models.ResumeRelation, error)
 	GetRelation(ctx context.Context, chatID string) (*models.ResumeRelation, error)
-	Read(ctx context.Context, chatID string) error
+	Read(ctx context.Context, snapshotID string) error
 }
 
 type Chat interface {

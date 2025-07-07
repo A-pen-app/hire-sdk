@@ -268,16 +268,16 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 	return &relation, nil
 }
 
-func (s *resumeStore) Read(ctx context.Context, chatID string) error {
+func (s *resumeStore) Read(ctx context.Context, snapshotID string) error {
 	query := `
 	UPDATE public.resume_relation
 	SET is_read=true, updated_at=?
-	WHERE chat_id=?
+	WHERE snapshot_id=?
 	`
 	query = s.db.Rebind(query)
-	_, err := s.db.Exec(query, time.Now(), chatID)
+	_, err := s.db.Exec(query, time.Now(), snapshotID)
 	if err != nil {
-		logging.Errorw(ctx, "failed to update resume relation read status", "err", err, "chatID", chatID)
+		logging.Errorw(ctx, "failed to update resume relation read status", "err", err, "chatID", snapshotID)
 		return err
 	}
 

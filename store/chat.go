@@ -202,32 +202,45 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 
 	chatID := ""
 	// step 1: check if chat_id already exists
-	query := `
-	SELECT ct.chat_id FROM public.chat_thread ct
-	JOIN public.chat c ON ct.chat_id = c.id
-	WHERE c.app_id=? AND ct.sender_id=? AND ct.receiver_id=?
-	  AND ((c.post_id IS NULL AND ? IS NULL) OR c.post_id=?)
-	`
+	var query string
+	var args []interface{}
+
+	if postID == nil {
+		// 查詢一般聊天室 (post_id IS NULL)
+		query = `
+		SELECT ct.chat_id FROM public.chat_thread ct
+		JOIN public.chat c ON ct.chat_id = c.id
+		WHERE c.app_id=? AND ct.sender_id=? AND ct.receiver_id=? AND c.post_id IS NULL`
+		args = []interface{}{appID, senderID, receiverID}
+	} else {
+		// 查詢特定貼文聊天室 (post_id = ?)
+		query = `
+		SELECT ct.chat_id FROM public.chat_thread ct
+		JOIN public.chat c ON ct.chat_id = c.id
+		WHERE c.app_id=? AND ct.sender_id=? AND ct.receiver_id=? AND c.post_id=?`
+		args = []interface{}{appID, senderID, receiverID, *postID}
+	}
+
 	query = s.db.Rebind(query)
-	if err := tx.QueryRow(query, appID, senderID, receiverID, postID, postID).Scan(&chatID); err == sql.ErrNoRows {
+	if err := tx.QueryRow(query, args...).Scan(&chatID); err == sql.ErrNoRows {
 
 		chatID = uuid.New().String()
 		// step 2: create a new chat
 		var query2 string
-		var args []interface{}
+		var args2 []interface{}
 		if postID == nil {
 			query2 = `
 			INSERT INTO public.chat (id, app_id, created_at, updated_at)
 			VALUES (?, ?, now(), now())`
-			args = []interface{}{chatID, appID}
+			args2 = []interface{}{chatID, appID}
 		} else {
 			query2 = `
 			INSERT INTO public.chat (id, app_id, post_id, created_at, updated_at)
 			VALUES (?, ?, ?, now(), now())`
-			args = []interface{}{chatID, appID, *postID}
+			args2 = []interface{}{chatID, appID, *postID}
 		}
 		query2 = s.db.Rebind(query2)
-		if _, err := tx.Exec(query2, args...); err != nil {
+		if _, err := tx.Exec(query2, args2...); err != nil {
 			logging.Errorw(ctx, "insert new chat failed", "err", err, "senderID", senderID, "receiverID", receiverID)
 			return "", err
 		}

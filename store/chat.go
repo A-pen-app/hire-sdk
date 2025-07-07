@@ -163,7 +163,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		"CT.sender_id=?",
 		"C.updated_at<TO_TIMESTAMP(?)",
 		"CT.status!=?",
-		"CT.control_flag=?",
+		"CT.control_flag IN (?, ?)",
 	}
 	values := []interface{}{
 		appID,
@@ -171,6 +171,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		next,
 		models.Deleted,
 		models.Pass,
+		models.NeverGotMessages,
 	}
 	if status != models.None {
 		conditions = append(conditions, "CT.status=?")

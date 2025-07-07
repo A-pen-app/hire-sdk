@@ -108,8 +108,12 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 			return nil, err
 		}
 
-		chat.ResumeSnapshot = *snapshot
-		chat.IsResumeRead = relation.IsRead
+		chat.ResumeSnapshot = models.ChatResumeSnapshot{
+			ID:           snapshot.ID,
+			Content:      snapshot.Content,
+			IsRead:       relation.IsRead,
+			UnlockStatus: models.UnlockStatusUnlocked,
+		}
 	}
 
 	return chat, nil
@@ -163,8 +167,12 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 				continue
 			}
 
-			chats[i].ResumeSnapshot = *snapshot
-			chats[i].IsResumeRead = relation.IsRead
+			chats[i].ResumeSnapshot = models.ChatResumeSnapshot{
+				ID:           snapshot.ID,
+				Content:      snapshot.Content,
+				IsRead:       relation.IsRead,
+				UnlockStatus: models.UnlockStatusUnlocked,
+			}
 		}
 	}
 

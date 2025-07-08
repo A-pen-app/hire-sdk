@@ -222,9 +222,10 @@ const (
 type Role int
 
 const (
-	RoleOfficial  Role = iota // 0: 官方
-	RoleRecruiter             // 1: 徵才方
+	RoleNone      Role = iota // 0: none
+	RoleOfficial              // 1: 官方
 	RoleJobSeeker             // 2: 求職方
+	RoleRecruiter             // 3: 徵才方
 )
 
 type DisplayUser struct {

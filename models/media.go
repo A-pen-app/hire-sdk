@@ -31,6 +31,7 @@ type MediaUpload struct {
 	MediaType   MediaType  `json:"-"`
 	URL         string     `json:"-"`
 	PreviewURL  *string    `json:"-"`
+	Placeholder *string    `json:"-"`
 	RedirectURL *string    `json:"-"`
 	Title       *string    `json:"-"`
 	Size        *int64     `json:"-"`

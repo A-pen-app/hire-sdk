@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	feedmodel "github.com/A-pen-app/feed-sdk/model"
 )
 
 // MessageType describes the type of message
@@ -203,6 +205,18 @@ type ChatRoom struct {
 	Role           Role               `json:"role" db:"-"`
 	HireStatus     string             `json:"hire_status" db:"-"`
 	ResumeSnapshot ChatResumeSnapshot `json:"resume_snapshot" db:"-"`
+}
+
+func (p ChatRoom) Feedtype() feedmodel.FeedType {
+	return feedmodel.TypeChat
+}
+
+func (p ChatRoom) Score() float64 {
+	return 0.
+}
+
+func (p ChatRoom) GetID() string {
+	return p.ChatID
 }
 
 type ChatResumeSnapshot struct {

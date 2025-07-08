@@ -23,7 +23,7 @@ type Media struct {
 	RedirectURL *string `json:"redirect_url,omitempty" db:"redirect_url"`
 	Title       *string `json:"title,omitempty" db:"title"`
 
-	Size      *int64     `json:"size,omitempty" db:"size"`
+	Size      *string    `json:"size,omitempty" db:"size"`
 	ExpiredAt *time.Time `json:"expired_at,omitempty" db:"expired_at"`
 }
 
@@ -34,6 +34,6 @@ type MediaUpload struct {
 	Placeholder *string    `json:"-"`
 	RedirectURL *string    `json:"-"`
 	Title       *string    `json:"-"`
-	Size        *int64     `json:"-"`
+	Size        *string    `json:"-"`
 	ExpiredAt   *time.Time `json:"-"`
 }

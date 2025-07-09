@@ -229,18 +229,19 @@ type ChatResumeSnapshot struct {
 type HireStatus int
 
 const (
-	HireStatusInactive HireStatus = 0
-	HireStatusActive   HireStatus = 1
+	HireStatusInactive HireStatus = iota
+	HireStatusActive
 )
 
-func (h HireStatus) String() string {
+func (h HireStatus) MarshalJSON() ([]byte, error) {
+	str := ""
 	switch h {
 	case HireStatusInactive:
-		return "inactive"
+		str = "inactive"
 	case HireStatusActive:
-		return "active"
+		str = "active"
 	}
-	return "inactive"
+	return json.Marshal(str)
 }
 
 type UnlockStatus int

@@ -20,3 +20,8 @@ type Chat interface {
 	SendMessage(ctx context.Context, bundleID, userID, chatID string, options ...models.SendOptionFunc) (*models.Message, error)
 	UnsendMessage(ctx context.Context, bundleID, userID, messageID string) error
 }
+
+type Agreement interface {
+	Agree(ctx context.Context, bundleID, userID, version string) error
+	Get(ctx context.Context, bundleID, userID string) (*models.AgreementRecord, error)
+}

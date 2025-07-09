@@ -203,7 +203,7 @@ type ChatRoom struct {
 	LastMessage    *Message            `json:"last_message" db:"-"`
 	PostID         *string             `json:"post_id" db:"post_id"`
 	Role           Role                `json:"role" db:"-"`
-	HireStatus     string              `json:"hire_status" db:"-"`
+	HireStatus     HireStatus          `json:"hire_status" db:"-" default:"1"`
 	ResumeSnapshot *ChatResumeSnapshot `json:"resume_snapshot" db:"-"`
 }
 
@@ -226,6 +226,23 @@ type ChatResumeSnapshot struct {
 	UnlockStatus UnlockStatus `json:"unlock_status"`
 }
 
+type HireStatus int
+
+const (
+	HireStatusInactive HireStatus = 0
+	HireStatusActive   HireStatus = 1
+)
+
+func (h HireStatus) String() string {
+	switch h {
+	case HireStatusInactive:
+		return "inactive"
+	case HireStatusActive:
+		return "active"
+	}
+	return "inactive"
+}
+
 type UnlockStatus int
 
 const (
@@ -243,7 +260,7 @@ const (
 )
 
 type DisplayUser struct {
-	ID        string  `json:"id"`
+	ID        string  `json:"user_id"`
 	Name      string  `json:"name"`
 	Picture   string  `json:"picture"`
 	Gender    string  `json:"gender"`

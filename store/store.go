@@ -41,3 +41,8 @@ type Media interface {
 	Get(ctx context.Context, mediaIDs []string) ([]*models.Media, error)
 	New(ctx context.Context, upload *models.MediaUpload) (string, error)
 }
+
+type Agreement interface {
+	Agree(ctx context.Context, appID, userID, version string) error
+	Get(ctx context.Context, appID, userID string) (*models.AgreementRecord, error)
+}

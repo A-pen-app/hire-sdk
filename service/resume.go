@@ -58,6 +58,21 @@ func (s *resumeService) Get(ctx context.Context, bundleID, userID string) (*mode
 	return resume, nil
 }
 
+func (s *resumeService) GetUserAppliedPostIDs(ctx context.Context, bundleID, userID string) ([]string, error) {
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return nil, err
+	}
+
+	postIDs, err := s.r.GetUserAppliedPostIDs(ctx, app.ID, userID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get resume", "err", err, "appID", app.ID, "userID", userID)
+		return nil, err
+	}
+	return postIDs, nil
+}
+
 func (s *resumeService) GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error) {
 	snapshot, err := s.r.GetSnapshot(ctx, snapshotID)
 	if err != nil {

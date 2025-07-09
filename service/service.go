@@ -9,6 +9,7 @@ import (
 type Resume interface {
 	Patch(ctx context.Context, bundleID, userID string, resume *models.ResumeContent) error
 	Get(ctx context.Context, bundleID, userID string) (*models.Resume, error)
+	GetUserAppliedPostIDs(ctx context.Context, bundleID, userID string) ([]string, error)
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error)
 }
 

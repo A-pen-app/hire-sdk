@@ -221,7 +221,7 @@ func (p ChatRoom) GetID() string {
 
 type ChatResumeSnapshot struct {
 	ID           string         `json:"id"`
-	Content      *ResumeContent `json:",inline"`
+	Content      *ResumeContent `json:"content"`
 	IsRead       bool           `json:"is_read"`
 	UnlockStatus UnlockStatus   `json:"unlock_status"`
 }

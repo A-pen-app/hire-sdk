@@ -10,6 +10,7 @@ import (
 type Resume interface {
 	Create(ctx context.Context, appID, userID string, content *models.ResumeContent) (*models.Resume, error)
 	Get(ctx context.Context, appID, userID string) (*models.Resume, error)
+	GetUserAppliedPostIDs(ctx context.Context, appID, userID string) ([]string, error)
 	Update(ctx context.Context, appID, userID string, resume *models.ResumeContent) error
 	CreateSnapshot(ctx context.Context, appID, userID string) (*models.ResumeSnapshot, error)
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error)

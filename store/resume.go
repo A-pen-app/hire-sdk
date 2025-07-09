@@ -96,6 +96,27 @@ func (s *resumeStore) Get(ctx context.Context, appID, userID string) (*models.Re
 	return &resume, nil
 }
 
+func (s *resumeStore) GetUserAppliedPostIDs(ctx context.Context, appID, userID string) ([]string, error) {
+	query := `
+	SELECT 
+		post_id
+	FROM public.resume_relation
+	WHERE 
+		app_id = $1 
+		AND 
+		user_id = $2
+	`
+	query = s.db.Rebind(query)
+
+	postIDs := []string{}
+	err := s.db.Select(&postIDs, query, appID, userID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get applied post ids", "err", err, "appID", appID, "userID", userID)
+		return nil, err
+	}
+	return postIDs, nil
+}
+
 func (s *resumeStore) Update(ctx context.Context, appID, userID string, content *models.ResumeContent) error {
 	query := `
 	UPDATE public.resume 

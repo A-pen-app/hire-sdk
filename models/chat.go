@@ -196,15 +196,15 @@ type ChatRoom struct {
 	IsPinned    bool            `json:"is_pinned" db:"is_pinned"`
 
 	//chat
-	AppID          string             `json:"-" db:"app_id"`
-	CreatedAt      time.Time          `json:"created_at" db:"created_at" example:"2023-10-01T04:00:00Z"`
-	UpdatedAt      time.Time          `json:"-" db:"updated_at"`
-	LastMessageID  *string            `json:"-" db:"last_message_id"`
-	LastMessage    *Message           `json:"last_message" db:"-"`
-	PostID         *string            `json:"post_id" db:"post_id"`
-	Role           Role               `json:"role" db:"-"`
-	HireStatus     string             `json:"hire_status" db:"-"`
-	ResumeSnapshot ChatResumeSnapshot `json:"resume_snapshot" db:"-"`
+	AppID          string              `json:"-" db:"app_id"`
+	CreatedAt      time.Time           `json:"created_at" db:"created_at" example:"2023-10-01T04:00:00Z"`
+	UpdatedAt      time.Time           `json:"-" db:"updated_at"`
+	LastMessageID  *string             `json:"-" db:"last_message_id"`
+	LastMessage    *Message            `json:"last_message" db:"-"`
+	PostID         *string             `json:"post_id" db:"post_id"`
+	Role           Role                `json:"role" db:"-"`
+	HireStatus     string              `json:"hire_status" db:"-"`
+	ResumeSnapshot *ChatResumeSnapshot `json:"resume_snapshot" db:"-"`
 }
 
 func (p ChatRoom) Feedtype() feedmodel.FeedType {

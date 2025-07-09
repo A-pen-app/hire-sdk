@@ -108,7 +108,7 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 			return nil, err
 		}
 
-		chat.ResumeSnapshot = models.ChatResumeSnapshot{
+		chat.ResumeSnapshot = &models.ChatResumeSnapshot{
 			ID:           snapshot.ID,
 			Content:      snapshot.Content,
 			IsRead:       relation.IsRead,
@@ -167,7 +167,7 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 				continue
 			}
 
-			chats[i].ResumeSnapshot = models.ChatResumeSnapshot{
+			chats[i].ResumeSnapshot = &models.ChatResumeSnapshot{
 				ID:           snapshot.ID,
 				Content:      snapshot.Content,
 				IsRead:       relation.IsRead,

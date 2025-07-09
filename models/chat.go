@@ -220,10 +220,10 @@ func (p ChatRoom) GetID() string {
 }
 
 type ChatResumeSnapshot struct {
-	ID           string `json:"id"`
-	Content      *ResumeContent
-	IsRead       bool         `json:"is_read"`
-	UnlockStatus UnlockStatus `json:"unlock_status"`
+	ID           string         `json:"id"`
+	Content      *ResumeContent `json:",inline"`
+	IsRead       bool           `json:"is_read"`
+	UnlockStatus UnlockStatus   `json:"unlock_status"`
 }
 
 type HireStatus int

@@ -96,7 +96,7 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 	}
 
 	if chat.PostID != nil {
-		relation, err := s.r.GetRelation(ctx, chatID)
+		relation, err := s.r.GetRelation(ctx, models.ByChat(chatID))
 		if err != nil {
 			logging.Errorw(ctx, "failed to get resume relation", "err", err, "chatID", chatID)
 			return nil, err
@@ -155,7 +155,7 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 		}
 
 		if chats[i].PostID != nil {
-			relation, err := s.r.GetRelation(ctx, chats[i].ChatID)
+			relation, err := s.r.GetRelation(ctx, models.ByChat(chats[i].ChatID))
 			if err != nil {
 				logging.Errorw(ctx, "get resume relation  failed", "err", err, "chatID", chats[i].ChatID)
 				continue

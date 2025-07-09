@@ -111,3 +111,23 @@ func (r *ResumeContent) Scan(value interface{}) error {
 	}
 	return json.Unmarshal(b, r)
 }
+
+type GetRelationOption struct {
+	ChatID     *string
+	SnapshotID *string
+}
+type GetRelationOptionFunc func(*GetRelationOption) error
+
+func ByChat(chatID string) GetRelationOptionFunc {
+	return func(opt *GetRelationOption) error {
+		opt.ChatID = &chatID
+		return nil
+	}
+}
+
+func BySnapshot(snapshotID string) GetRelationOptionFunc {
+	return func(opt *GetRelationOption) error {
+		opt.SnapshotID = &snapshotID
+		return nil
+	}
+}

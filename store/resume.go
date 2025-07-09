@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/A-pen-app/hire-sdk/models"
@@ -231,7 +232,15 @@ func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, 
 	}, nil
 }
 
-func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.ResumeRelation, error) {
+func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelationOptionFunc) (*models.ResumeRelation, error) {
+	opt := models.GetRelationOption{}
+	for _, f := range opts {
+		if err := f(&opt); err != nil {
+			logging.Errorw(ctx, "failed to apply get relation option", "err", err)
+			return nil, err
+		}
+	}
+
 	query := `
 	SELECT 
 		id,
@@ -243,13 +252,31 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 		is_read,
 		created_at,
 		updated_at
-	FROM public.resume_relation
-	WHERE chat_id = ?
-	`
+	FROM public.resume_relation`
+
+	conditions := []string{}
+	params := []interface{}{}
+
+	if opt.ChatID != nil {
+		conditions = append(conditions, "chat_id=?")
+		params = append(params, *opt.ChatID)
+	}
+	if opt.SnapshotID != nil {
+		conditions = append(conditions, "snapshot_id=?")
+		params = append(params, *opt.SnapshotID)
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	} else {
+		logging.Errorw(ctx, "at least one filter condition is required")
+		return nil, models.ErrorWrongParams
+	}
+
 	query = s.db.Rebind(query)
 
 	var relation models.ResumeRelation
-	err := s.db.QueryRowx(query, chatID).Scan(
+	err := s.db.QueryRowx(query, params...).Scan(
 		&relation.ID,
 		&relation.AppID,
 		&relation.UserID,
@@ -261,7 +288,7 @@ func (s *resumeStore) GetRelation(ctx context.Context, chatID string) (*models.R
 		&relation.UpdatedAt,
 	)
 	if err != nil {
-		logging.Errorw(ctx, "failed to get resume relation", "err", err, "chatID", chatID)
+		logging.Errorw(ctx, "failed to get resume relation", "err", err, "opts", opts)
 		return nil, err
 	}
 

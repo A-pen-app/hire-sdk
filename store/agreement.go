@@ -70,13 +70,13 @@ func (as *agreementStore) Get(ctx context.Context, appID, userID string) (*model
 	LIMIT 1
 	`
 	query = as.db.Rebind(query)
-	if err := as.db.QueryRowx(query, userID).StructScan(&r); err != nil {
+	if err := as.db.QueryRowx(query, appID, userID).StructScan(&r); err != nil {
 		if err == sql.ErrNoRows {
 			r.VersionAgreed = nil
 			r.AgreedAt = nil
 			return &r, nil
 		}
-		logging.Errorw(ctx, "get user agreement record failed", "err", err, "user_id", userID)
+		logging.Errorw(ctx, "get user agreement record failed", "err", err, "app_id", appID, "user_id", userID)
 		return nil, err
 	}
 

@@ -109,7 +109,7 @@ type Message struct {
 	ChatID    string        `json:"chat_id" db:"chat_id" example:"uuid"`
 	CreatedAt time.Time     `json:"created_at" db:"created_at" example:"2023-10-01T04:00:00Z"`
 	Status    MessageStatus `json:"status" db:"status"`
-
+	IsMine    *bool         `json:"is_mine,omitempty" db:"-"`
 	// 0: 不使用
 	// 1: 文字訊息
 	// 2: 圖片訊息

@@ -342,6 +342,17 @@ func WithMedia(mediaIDs []string) SendOptionFunc {
 	}
 }
 
+func WithFile(fileIDs []string) SendOptionFunc {
+	return func(opt *SendOption) error {
+		if opt.Type != MsgEmpty {
+			return errors.New("wrong parameters")
+		}
+		opt.Type = MsgFile
+		opt.MediaIDs = fileIDs
+		return nil
+	}
+}
+
 func ReplyTo(replyToMessageID string) SendOptionFunc {
 	return func(opt *SendOption) error {
 		opt.ReplyToMessageID = &replyToMessageID

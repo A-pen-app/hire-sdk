@@ -400,6 +400,9 @@ func (s *chatService) aggregateMessages(ctx context.Context, userID string, nonF
 		default:
 			msg.Status = models.Normal
 		}
+
+		s.injectContent(ctx, userID, msg, true)
+
 		msgs = append(msgs, msg)
 	}
 	return msgs

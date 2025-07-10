@@ -220,10 +220,10 @@ func (p ChatRoom) GetID() string {
 }
 
 type ChatResumeSnapshot struct {
-	ID           string         `json:"id"`
-	Content      *ResumeContent `json:"content"`
-	IsRead       bool           `json:"is_read"`
-	UnlockStatus UnlockStatus   `json:"unlock_status"`
+	ID      string         `json:"id"`
+	Content *ResumeContent `json:"content"`
+	IsRead  bool           `json:"is_read"`
+	Status  ResumeStatus   `json:"status"`
 }
 
 type HireStatus int
@@ -237,19 +237,30 @@ func (h HireStatus) MarshalJSON() ([]byte, error) {
 	str := ""
 	switch h {
 	case HireStatusInactive:
-		str = "inactive"
+		str = "INACTIVE"
 	case HireStatusActive:
-		str = "active"
+		str = "ACTIVE"
 	}
 	return json.Marshal(str)
 }
 
-type UnlockStatus int
+type ResumeStatus int
 
 const (
-	UnlockStatusUnlocked UnlockStatus = iota
-	UnlockStatusLocked
+	ResumeStatusLocked ResumeStatus = iota
+	ResumeStatusUnlocked
 )
+
+func (u ResumeStatus) MarshalJSON() ([]byte, error) {
+	str := ""
+	switch u {
+	case ResumeStatusLocked:
+		str = "LOCKED"
+	case ResumeStatusUnlocked:
+		str = "UNLOCKED"
+	}
+	return json.Marshal(str)
+}
 
 type Role int
 

@@ -32,7 +32,7 @@ func (s *subscriptionService) Get(ctx context.Context, bundleID, userID string) 
 		return nil, err
 	}
 
-	if subscription.Status == models.SubscriptionSubscribed {
+	if subscription.Status.HasOneOf(models.SubscriptionSubscribed) {
 		if subscription.ExpiresAt != nil {
 			logging.Errorw(ctx, "subscription expires at is nil", "app_id", app.ID, "user_id", userID)
 			return nil, errors.New("subscription expires at is nil")
@@ -53,10 +53,7 @@ func (s *subscriptionService) Update(ctx context.Context, bundleID, userID strin
 		return err
 	}
 
-	switch status {
-	case models.SubscriptionNone:
-		expiredAt = nil
-	case models.SubscriptionSubscribed:
+	if status.HasOneOf(models.SubscriptionSubscribed) {
 		if expiredAt == nil {
 			logging.Errorw(ctx, "expired at is nil", "app_id", app.ID, "user_id", userID)
 			return models.ErrorWrongParams
@@ -66,8 +63,10 @@ func (s *subscriptionService) Update(ctx context.Context, bundleID, userID strin
 			status = models.SubscriptionNone
 			expiredAt = nil
 		}
-	default:
-		return models.ErrorWrongParams
+	}
+
+	if status.HasOneOf(models.SubscriptionNone) {
+		expiredAt = nil
 	}
 
 	return s.s.Update(ctx, app.ID, userID, status, expiredAt)

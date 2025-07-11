@@ -39,7 +39,7 @@ func (s *subscriptionService) Get(ctx context.Context, bundleID, userID string) 
 		}
 
 		if subscription.ExpiresAt.Before(time.Now()) {
-			subscription.Status = models.SubscriptionNone
+			subscription.Status = (subscription.Status &^ models.SubscriptionSubscribed) | models.SubscriptionNone
 		}
 	}
 
@@ -60,7 +60,7 @@ func (s *subscriptionService) Update(ctx context.Context, bundleID, userID strin
 		}
 
 		if expiredAt.Before(time.Now()) {
-			status = models.SubscriptionNone
+			status = (status &^ models.SubscriptionSubscribed) | models.SubscriptionNone
 			expiredAt = nil
 		}
 	}

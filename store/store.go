@@ -47,3 +47,8 @@ type Agreement interface {
 	Agree(ctx context.Context, appID, userID, version string) error
 	Get(ctx context.Context, appID, userID string) (*models.AgreementRecord, error)
 }
+
+type Subscription interface {
+	Get(ctx context.Context, appID, userID string) (*models.UserSubscription, error)
+	Update(ctx context.Context, appID, userID string, status models.SubscriptionStatus, expiresAt *time.Time) error
+}

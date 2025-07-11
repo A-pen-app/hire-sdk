@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/A-pen-app/hire-sdk/models"
 )
@@ -25,4 +26,9 @@ type Chat interface {
 type Agreement interface {
 	Agree(ctx context.Context, bundleID, userID, version string) error
 	Get(ctx context.Context, bundleID, userID string) (*models.AgreementRecord, error)
+}
+
+type Subscription interface {
+	Get(ctx context.Context, bundleID, userID string) (*models.UserSubscription, error)
+	Update(ctx context.Context, bundleID, userID string, status models.SubscriptionStatus, expiresAt *time.Time) error
 }

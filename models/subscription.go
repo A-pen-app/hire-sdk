@@ -22,14 +22,12 @@ func (s SubscriptionStatus) HasOneOf(flag SubscriptionStatus) bool {
 }
 
 func (s SubscriptionStatus) MarshalJSON() ([]byte, error) {
-	var str string
-	switch s {
-	case SubscriptionSubscribed, SubOptionFree:
+	str := ""
+	if s.HasOneOf(SubscriptionSubscribed) || s.HasOneOf(SubOptionFree) {
 		str = "SUBSCRIBED"
-	case SubscriptionNever, SubscriptionNone:
+	} else {
 		str = "UNSUBSCRIBED"
 	}
-
 	return json.Marshal(str)
 }
 

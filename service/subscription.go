@@ -53,11 +53,6 @@ func (s *subscriptionService) Update(ctx context.Context, bundleID, userID strin
 		return err
 	}
 
-	if _, err := s.s.Get(ctx, app.ID, userID); err != nil {
-		logging.Errorw(ctx, "get subscription failed", "err", err, "app_id", app.ID, "user_id", userID)
-		return err
-	}
-
 	switch status {
 	case models.SubscriptionNone:
 		expiredAt = nil

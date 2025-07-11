@@ -33,7 +33,7 @@ func (s *subscriptionService) Get(ctx context.Context, bundleID, userID string) 
 	}
 
 	if subscription.Status.HasOneOf(models.SubscriptionSubscribed) {
-		if subscription.ExpiresAt != nil {
+		if subscription.ExpiresAt == nil {
 			logging.Errorw(ctx, "subscription expires at is nil", "app_id", app.ID, "user_id", userID)
 			return nil, errors.New("subscription expires at is nil")
 		}

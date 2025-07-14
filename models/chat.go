@@ -231,6 +231,7 @@ type HireStatus int
 const (
 	HireStatusInactive HireStatus = iota
 	HireStatusActive
+	HireStatusDeleted
 )
 
 func (h HireStatus) MarshalJSON() ([]byte, error) {
@@ -240,6 +241,8 @@ func (h HireStatus) MarshalJSON() ([]byte, error) {
 		str = "INACTIVE"
 	case HireStatusActive:
 		str = "ACTIVE"
+	case HireStatusDeleted:
+		str = "DELETED"
 	}
 	return json.Marshal(str)
 }

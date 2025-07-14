@@ -203,7 +203,7 @@ type ChatRoom struct {
 	LastMessage    *Message            `json:"last_message" db:"-"`
 	PostID         *string             `json:"post_id" db:"post_id"`
 	Role           Role                `json:"role" db:"-"`
-	HireStatus     HireStatus          `json:"hire_status" db:"-" default:"1"`
+	HireStatus     HireStatus          `json:"hire_status" db:"-" default:"INACTIVE"`
 	ResumeSnapshot *ChatResumeSnapshot `json:"resume_snapshot" db:"-"`
 }
 
@@ -226,26 +226,13 @@ type ChatResumeSnapshot struct {
 	Status  ResumeStatus   `json:"status"`
 }
 
-type HireStatus int
+type HireStatus string
 
 const (
-	HireStatusInactive HireStatus = iota
-	HireStatusActive
-	HireStatusDeleted
+	HireStatusInactive HireStatus = "INACTIVE"
+	HireStatusActive   HireStatus = "ACTIVE"
+	HireStatusDeleted  HireStatus = "DELETED"
 )
-
-func (h HireStatus) MarshalJSON() ([]byte, error) {
-	str := ""
-	switch h {
-	case HireStatusInactive:
-		str = "INACTIVE"
-	case HireStatusActive:
-		str = "ACTIVE"
-	case HireStatusDeleted:
-		str = "DELETED"
-	}
-	return json.Marshal(str)
-}
 
 type ResumeStatus int
 

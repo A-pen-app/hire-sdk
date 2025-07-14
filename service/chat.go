@@ -86,6 +86,9 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 		return nil, err
 	}
 
+	hireStatus := models.HireStatusInactive
+	chat.HireStatus = &hireStatus
+
 	if msgID := chat.LastMessageID; msgID != nil {
 		msg, err := s.aggregateLastMessage(ctx, userID, *msgID, false)
 		if err != nil {
@@ -145,6 +148,10 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 	}
 
 	for i := range chats {
+
+		hireStatus := models.HireStatusInactive
+		chats[i].HireStatus = &hireStatus
+
 		if msgID := chats[i].LastMessageID; msgID != nil {
 			msg, err := s.aggregateLastMessage(ctx, userID, *msgID, true)
 			if err != nil {

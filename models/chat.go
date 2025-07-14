@@ -203,7 +203,7 @@ type ChatRoom struct {
 	LastMessage    *Message            `json:"last_message" db:"-"`
 	PostID         *string             `json:"post_id" db:"post_id"`
 	Role           Role                `json:"role" db:"-"`
-	HireStatus     HireStatus          `json:"hire_status" db:"-" default:"INACTIVE"`
+	HireStatus     *HireStatus         `json:"hire_status" db:"-" default:"INACTIVE" example:"INACTIVE"`
 	ResumeSnapshot *ChatResumeSnapshot `json:"resume_snapshot" db:"-"`
 }
 

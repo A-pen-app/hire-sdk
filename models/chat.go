@@ -267,6 +267,7 @@ type DisplayUser struct {
 	Gender      string  `json:"gender"`
 	Character   *string `json:"character"`
 	IsAnonymous bool    `json:"is_anonymous"`
+	PushToken   *string `json:"-"`
 }
 
 type Money struct {

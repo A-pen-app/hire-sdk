@@ -255,19 +255,18 @@ func (u ResumeStatus) MarshalJSON() ([]byte, error) {
 type Role int
 
 const (
-	RoleNone      Role = iota // 0: none
-	RoleOfficial              // 1: 官方
+	RoleOfficial  Role = iota // 0: 官方
+	RoleRecruiter             // 1: 徵才方
 	RoleJobSeeker             // 2: 求職方
-	RoleRecruiter             // 3: 徵才方
 )
 
 type DisplayUser struct {
-	ID        string  `json:"user_id"`
-	Name      string  `json:"name"`
-	Picture   string  `json:"picture"`
-	Gender    string  `json:"gender"`
-	Character *string `json:"-"`
-	PushToken *string `json:"-"`
+	ID          string  `json:"user_id"`
+	Name        string  `json:"name"`
+	Picture     string  `json:"picture"`
+	Gender      string  `json:"gender"`
+	Character   *string `json:"character"`
+	IsAnonymous bool    `json:"is_anonymous"`
 }
 
 type Money struct {

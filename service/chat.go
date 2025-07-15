@@ -374,7 +374,7 @@ func (s *chatService) injectContent(ctx context.Context, userID string, msg *mod
 			// wipe out message content for unsent
 			replyMsg.Body = nil
 			replyMsg.MediaIDs = nil
-			replyMsg.Type = models.MsgEmpty
+			// replyMsg.Type = models.MsgEmpty
 		default:
 			replyMsg.Status = models.Normal
 		}

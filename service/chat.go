@@ -402,7 +402,7 @@ func (s *chatService) aggregateMessages(ctx context.Context, userID string, nonF
 			// wipe out message content for unsent
 			msg.Body = nil
 			msg.MediaIDs = nil
-			msg.Type = models.MsgEmpty
+			// msg.Type = models.MsgEmpty
 			msg.Status = models.Unsent
 		default:
 			msg.Status = models.Normal

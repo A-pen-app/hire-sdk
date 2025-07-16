@@ -21,6 +21,10 @@ func (s SubscriptionStatus) HasOneOf(flag SubscriptionStatus) bool {
 	return s&flag != 0
 }
 
+func (s SubscriptionStatus) Set(flag SubscriptionStatus) SubscriptionStatus {
+	return s | flag
+}
+
 func (s SubscriptionStatus) MarshalJSON() ([]byte, error) {
 	str := ""
 	if s.HasOneOf(SubscriptionSubscribed) || s.HasOneOf(SubOptionFree) {

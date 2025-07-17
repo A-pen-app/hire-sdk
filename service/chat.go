@@ -57,7 +57,7 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 		}
 
 		// Create a relation between the resume snapshot and the chat room
-		if _, err := s.r.CreateRelation(ctx, app.ID, senderID, snapshot.ID, chatID, *postID); err != nil {
+		if _, err := s.r.CreateRelation(ctx, app.ID, senderID, snapshot.ID, chatID, *postID, models.ResumeStatusLocked); err != nil {
 			logging.Errorw(ctx, "failed to create resume relation", "err", err, "snapshotID", snapshot.ID, "chatID", chatID, "postID", *postID)
 			return "", err
 		}
@@ -115,7 +115,7 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 			ID:      snapshot.ID,
 			Content: snapshot.Content,
 			IsRead:  relation.IsRead,
-			Status:  models.ResumeStatusUnlocked,
+			Status:  relation.Status,
 		}
 	}
 
@@ -178,7 +178,7 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 				ID:      snapshot.ID,
 				Content: snapshot.Content,
 				IsRead:  relation.IsRead,
-				Status:  models.ResumeStatusUnlocked,
+				Status:  relation.Status,
 			}
 		}
 	}

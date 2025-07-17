@@ -207,7 +207,7 @@ func (s *resumeStore) GetSnapshot(ctx context.Context, snapshotID string) (*mode
 	return &snapshot, nil
 }
 
-func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, snapshotID string, chatID string, postID string) (*models.ResumeRelation, error) {
+func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, snapshotID string, chatID string, postID string, status models.ResumeStatus) (*models.ResumeRelation, error) {
 	relationID := uuid.New().String()
 	now := time.Now()
 
@@ -220,7 +220,8 @@ func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, 
 		post_id,
 		chat_id,
 		created_at,
-		updated_at
+		updated_at,
+		status
 	)
 	VALUES (
 		?,
@@ -235,7 +236,7 @@ func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, 
 	`
 	query = s.db.Rebind(query)
 
-	_, err := s.db.Exec(query, relationID, appID, userID, snapshotID, postID, chatID, now, now)
+	_, err := s.db.Exec(query, relationID, appID, userID, snapshotID, postID, chatID, now, now, status)
 	if err != nil {
 		logging.Errorw(ctx, "failed to create resume relation", "err", err, "snapshotID", snapshotID, "chatID", chatID, "postID", postID)
 		return nil, err
@@ -272,7 +273,8 @@ func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelatio
 		chat_id,
 		is_read,
 		created_at,
-		updated_at
+		updated_at,
+		status
 	FROM public.resume_relation`
 
 	conditions := []string{}
@@ -307,6 +309,7 @@ func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelatio
 		&relation.IsRead,
 		&relation.CreatedAt,
 		&relation.UpdatedAt,
+		&relation.Status,
 	)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get resume relation", "err", err, "opts", opts)
@@ -326,6 +329,26 @@ func (s *resumeStore) Read(ctx context.Context, snapshotID string) error {
 	_, err := s.db.Exec(query, time.Now(), snapshotID)
 	if err != nil {
 		logging.Errorw(ctx, "failed to update resume relation read status", "err", err, "chatID", snapshotID)
+		return err
+	}
+
+	return nil
+}
+
+func (s *resumeStore) UpdateRelationStatus(ctx context.Context, snapshotID string, status models.ResumeStatus) error {
+	if _, err := s.GetRelation(ctx, models.BySnapshot(snapshotID)); err != nil {
+		logging.Errorw(ctx, "failed to get resume relation", "err", err, "snapshotID", snapshotID)
+		return err
+	}
+
+	query := `
+	UPDATE public.resume_relation
+	SET status=?
+	WHERE snapshot_id=?
+	`
+	query = s.db.Rebind(query)
+	if _, err := s.db.Exec(query, status, snapshotID); err != nil {
+		logging.Errorw(ctx, "failed to update resume relation status", "err", err, "snapshotID", snapshotID)
 		return err
 	}
 

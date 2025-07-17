@@ -87,15 +87,34 @@ type ResumeSnapshot struct {
 }
 
 type ResumeRelation struct {
-	ID         string    `json:"-" db:"id"`
-	AppID      string    `json:"-" db:"app_id"`
-	UserID     string    `json:"-" db:"user_id"`
-	SnapshotID string    `json:"-" db:"snapshot_id"`
-	PostID     string    `json:"-" db:"post_id"`
-	ChatID     string    `json:"-" db:"chat_id"`
-	IsRead     bool      `json:"-" db:"is_read"`
-	CreatedAt  time.Time `json:"-" db:"created_at"`
-	UpdatedAt  time.Time `json:"-" db:"updated_at"`
+	ID         string       `json:"-" db:"id"`
+	AppID      string       `json:"-" db:"app_id"`
+	UserID     string       `json:"-" db:"user_id"`
+	SnapshotID string       `json:"-" db:"snapshot_id"`
+	PostID     string       `json:"-" db:"post_id"`
+	ChatID     string       `json:"-" db:"chat_id"`
+	IsRead     bool         `json:"-" db:"is_read"`
+	CreatedAt  time.Time    `json:"-" db:"created_at"`
+	UpdatedAt  time.Time    `json:"-" db:"updated_at"`
+	Status     ResumeStatus `json:"-" db:"status"`
+}
+
+type ResumeStatus int
+
+const (
+	ResumeStatusLocked ResumeStatus = iota
+	ResumeStatusUnlocked
+)
+
+func (u ResumeStatus) MarshalJSON() ([]byte, error) {
+	str := ""
+	switch u {
+	case ResumeStatusLocked:
+		str = "LOCKED"
+	case ResumeStatusUnlocked:
+		str = "UNLOCKED"
+	}
+	return json.Marshal(str)
 }
 
 // Value implements the driver.Valuer interface for inserting as jsonb

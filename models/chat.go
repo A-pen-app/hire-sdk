@@ -234,24 +234,6 @@ const (
 	HireStatusDeleted  HireStatus = "DELETED"
 )
 
-type ResumeStatus int
-
-const (
-	ResumeStatusLocked ResumeStatus = iota
-	ResumeStatusUnlocked
-)
-
-func (u ResumeStatus) MarshalJSON() ([]byte, error) {
-	str := ""
-	switch u {
-	case ResumeStatusLocked:
-		str = "LOCKED"
-	case ResumeStatusUnlocked:
-		str = "UNLOCKED"
-	}
-	return json.Marshal(str)
-}
-
 type Role int
 
 const (

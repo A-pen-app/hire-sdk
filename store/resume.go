@@ -231,6 +231,7 @@ func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, 
 		?,
 		?,
 		?,
+		?,
 		?
 	)
 	`
@@ -251,6 +252,7 @@ func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, 
 		ChatID:     chatID,
 		CreatedAt:  now,
 		UpdatedAt:  now,
+		Status:     status,
 	}, nil
 }
 

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"strconv"
 
 	"github.com/A-pen-app/hire-sdk/models"
@@ -14,14 +15,16 @@ type chatService struct {
 	r store.Resume
 	a store.App
 	m store.Media
+	s store.Subscription
 }
 
-func NewChat(c store.Chat, r store.Resume, a store.App, m store.Media) Chat {
+func NewChat(c store.Chat, r store.Resume, a store.App, m store.Media, s store.Subscription) Chat {
 	return &chatService{
 		c: c,
 		r: r,
 		a: a,
 		m: m,
+		s: s,
 	}
 }
 
@@ -111,11 +114,29 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 			return nil, err
 		}
 
+		status := models.ResumeStatusLocked
+		if userID == relation.UserID {
+			status = models.ResumeStatusUnlocked
+		} else {
+
+			subscription, err := s.s.Get(ctx, app.ID, userID)
+			if err != nil && err != sql.ErrNoRows {
+				logging.Errorw(ctx, "failed to get subscription", "err", err, "appID", app.ID, "userID", userID)
+				return nil, err
+			}
+
+			if subscription != nil && subscription.Status.HasOneOf(models.SubscriptionSubscribed) {
+				status = models.ResumeStatusUnlocked
+			} else {
+				status = relation.Status
+			}
+		}
+
 		chat.ResumeSnapshot = &models.ChatResumeSnapshot{
 			ID:      snapshot.ID,
 			Content: snapshot.Content,
 			IsRead:  relation.IsRead,
-			Status:  relation.Status,
+			Status:  status,
 		}
 	}
 
@@ -174,11 +195,29 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 				continue
 			}
 
+			status := models.ResumeStatusLocked
+			if userID == relation.UserID {
+				status = models.ResumeStatusUnlocked
+			} else {
+
+				subscription, err := s.s.Get(ctx, app.ID, userID)
+				if err != nil && err != sql.ErrNoRows {
+					logging.Errorw(ctx, "failed to get subscription", "err", err, "appID", app.ID, "userID", userID)
+					continue
+				}
+
+				if subscription != nil && subscription.Status.HasOneOf(models.SubscriptionSubscribed) {
+					status = models.ResumeStatusUnlocked
+				} else {
+					status = relation.Status
+				}
+			}
+
 			chats[i].ResumeSnapshot = &models.ChatResumeSnapshot{
 				ID:      snapshot.ID,
 				Content: snapshot.Content,
 				IsRead:  relation.IsRead,
-				Status:  relation.Status,
+				Status:  status,
 			}
 		}
 	}

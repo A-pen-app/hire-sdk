@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"time"
 
@@ -314,7 +315,9 @@ func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelatio
 		&relation.Status,
 	)
 	if err != nil {
-		logging.Errorw(ctx, "failed to get resume relation", "err", err, "opts", opts)
+		if err != sql.ErrNoRows {
+			logging.Errorw(ctx, "failed to get resume relation", "err", err, "opts", opts)
+		}
 		return nil, err
 	}
 

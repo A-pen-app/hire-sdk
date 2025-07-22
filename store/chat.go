@@ -133,7 +133,7 @@ func (s *chatStore) Pin(ctx context.Context, chatID, userID string, isPinned boo
 	return nil
 }
 
-func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool) ([]*models.ChatRoom, error) {
+func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, includeNoMessage bool) ([]*models.ChatRoom, error) {
 	chats := []*models.ChatRoom{}
 	if next == "" {
 		// +2 seconds to prevent the last chat is created at almost the same time with getting chats
@@ -163,15 +163,20 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		"CT.sender_id=?",
 		"C.updated_at<TO_TIMESTAMP(?)",
 		"CT.status!=?",
-		"CT.control_flag IN (?, ?)",
 	}
 	values := []interface{}{
 		appID,
 		userID,
 		next,
 		models.Deleted,
-		models.Pass,
-		models.NeverGotMessages,
+	}
+
+	if includeNoMessage {
+		conditions = append(conditions, "CT.control_flag IN (?, ?)")
+		values = append(values, models.Pass, models.NeverGotMessages)
+	} else {
+		conditions = append(conditions, "CT.control_flag = ?")
+		values = append(values, models.Pass)
 	}
 	if status != models.None {
 		conditions = append(conditions, "CT.status=?")

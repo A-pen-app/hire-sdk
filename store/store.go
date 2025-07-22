@@ -51,5 +51,6 @@ type Agreement interface {
 
 type Subscription interface {
 	Get(ctx context.Context, appID, userID string) (*models.UserSubscription, error)
+	List(ctx context.Context, appID string, userIDs []string) ([]*models.UserSubscription, error)
 	Update(ctx context.Context, appID, userID string, status models.SubscriptionStatus, expiresAt *time.Time) error
 }

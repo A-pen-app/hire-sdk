@@ -8,6 +8,7 @@ import (
 	"github.com/A-pen-app/hire-sdk/models"
 	"github.com/A-pen-app/logging"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 type subscriptionStore struct {
@@ -42,6 +43,36 @@ func (ss *subscriptionStore) Get(ctx context.Context, appID, userID string) (*mo
 	}
 
 	return subscription, nil
+}
+
+func (ss *subscriptionStore) List(ctx context.Context, appID string, userIDs []string) ([]*models.UserSubscription, error) {
+	subscriptions := []*models.UserSubscription{}
+
+	// Handle empty userIDs slice
+	if len(userIDs) == 0 {
+		return subscriptions, nil
+	}
+
+	query := `
+	SELECT 
+		app_id,
+		user_id,	
+		status,
+		expires_at,
+		created_at,
+		updated_at
+	FROM public.user_subscription 
+	WHERE app_id = ? AND user_id = ANY(?)
+	`
+
+	query = ss.db.Rebind(query)
+	err := ss.db.Select(&subscriptions, query, appID, pq.Array(userIDs))
+	if err != nil {
+		logging.Errorw(ctx, "get user subscriptions failed", "err", err, "app_id", appID, "user_ids", userIDs)
+		return nil, err
+	}
+
+	return subscriptions, nil
 }
 
 func (ss *subscriptionStore) Update(ctx context.Context, appID, userID string, status models.SubscriptionStatus, expiresAt *time.Time) error {

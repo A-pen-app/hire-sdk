@@ -70,6 +70,32 @@ const (
 	CollaborationType_ProductExperience                          // 產品體驗
 )
 
+func (c CollaborationType) String() string {
+	switch c {
+	case CollaborationType_FullTime:
+		return "全職"
+	case CollaborationType_PartTime:
+		return "兼職"
+	case CollaborationType_Attending:
+		return "掛牌"
+	case CollaborationType_Lecturer:
+		return "講座"
+	case CollaborationType_Prescription:
+		return "葉配"
+	case CollaborationType_Endorsement:
+		return "代言"
+	case CollaborationType_Telemedicine:
+		return "遠距醫療"
+	case CollaborationType_MarketResearch:
+		return "市調訪談"
+	case CollaborationType_AcademicEditing:
+		return "學術編輯"
+	case CollaborationType_ProductExperience:
+		return "產品體驗"
+	}
+	return ""
+}
+
 type Resume struct {
 	ID        string         `json:"-" db:"id"`
 	AppID     string         `json:"-" db:"app_id"`

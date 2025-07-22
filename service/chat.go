@@ -231,6 +231,35 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 	return chats[:n], next, nil
 }
 
+func (s *chatService) FetchNewMessages(ctx context.Context, bundleID, userID, chatID string, messageID string) ([]*models.Message, error) {
+
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return nil, err
+	}
+
+	// check ownership
+	if _, err := s.c.Get(ctx, app.ID, chatID, userID); err != nil {
+		logging.Errorw(ctx, "failed to verify chat ownership", "err", err, "appID", app.ID, "chatID", chatID, "userID", userID)
+		return nil, err
+	}
+	// check last message
+	lastMsg, err := s.c.GetMessage(ctx, messageID)
+	if err != nil {
+		return nil, err
+	} else if lastMsg.ChatID != chatID {
+		return nil, models.ErrorNotAllowed
+	}
+
+	nonFilteredMsgs, err := s.c.GetNewMessages(ctx, chatID, lastMsg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.aggregateMessages(ctx, userID, nonFilteredMsgs), nil
+}
+
 func (s *chatService) GetChatMessages(ctx context.Context, bundleID, userID, chatID string, next string, count int) ([]*models.Message, string, error) {
 
 	app, err := s.a.GetByBundleID(ctx, bundleID)

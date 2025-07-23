@@ -28,7 +28,7 @@ func NewChat(c store.Chat, r store.Resume, a store.App, m store.Media, s store.S
 	}
 }
 
-func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID string, postID *string, resume *models.ResumeContent) (string, error) {
+func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID string, postID *string, resume *models.ResumeContent, resumeStatus models.ResumeStatus) (string, error) {
 	app, err := s.a.GetByBundleID(ctx, bundleID)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
@@ -60,7 +60,7 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 		}
 
 		// Create a relation between the resume snapshot and the chat room
-		if _, err := s.r.CreateRelation(ctx, app.ID, senderID, snapshot.ID, chatID, *postID, models.ResumeStatusLocked); err != nil {
+		if _, err := s.r.CreateRelation(ctx, app.ID, senderID, snapshot.ID, chatID, *postID, resumeStatus); err != nil {
 			logging.Errorw(ctx, "failed to create resume relation", "err", err, "snapshotID", snapshot.ID, "chatID", chatID, "postID", *postID)
 			return "", err
 		}

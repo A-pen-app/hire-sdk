@@ -18,6 +18,7 @@ type Resume interface {
 	GetRelation(ctx context.Context, opts ...models.GetRelationOptionFunc) (*models.ResumeRelation, error)
 	Read(ctx context.Context, snapshotID string) error
 	UpdateRelationStatus(ctx context.Context, snapshotID string, status models.ResumeStatus) error
+	UpdateRelationListStatus(ctx context.Context, postIDs []string, status models.ResumeStatus) error
 }
 
 type Chat interface {

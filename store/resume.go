@@ -359,3 +359,18 @@ func (s *resumeStore) UpdateRelationStatus(ctx context.Context, snapshotID strin
 
 	return nil
 }
+
+func (s *resumeStore) UpdateRelationListStatus(ctx context.Context, postIDs []string, status models.ResumeStatus) error {
+	query := `
+	UPDATE public.resume_relation
+	SET status=?
+	WHERE post_id IN (?)
+	`
+	query = s.db.Rebind(query)
+	if _, err := s.db.Exec(query, status, postIDs); err != nil {
+		logging.Errorw(ctx, "failed to update resume relation status", "err", err, "postIDs", postIDs)
+		return err
+	}
+
+	return nil
+}

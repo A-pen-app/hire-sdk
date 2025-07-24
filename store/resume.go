@@ -10,6 +10,7 @@ import (
 	"github.com/A-pen-app/logging"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 type resumeStore struct {
@@ -364,10 +365,10 @@ func (s *resumeStore) UpdateRelationListStatus(ctx context.Context, postIDs []st
 	query := `
 	UPDATE public.resume_relation
 	SET status=?
-	WHERE post_id IN (?)
+	WHERE post_id = ANY(?)
 	`
 	query = s.db.Rebind(query)
-	if _, err := s.db.Exec(query, status, postIDs); err != nil {
+	if _, err := s.db.Exec(query, status, pq.Array(postIDs)); err != nil {
 		logging.Errorw(ctx, "failed to update resume relation status", "err", err, "postIDs", postIDs)
 		return err
 	}

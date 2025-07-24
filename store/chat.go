@@ -186,7 +186,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		conditions = append(conditions, "CT.unread_count>0")
 	}
 
-	query = query + strings.Join(conditions, " AND ") + " ORDER BY C.post_id IS NULL DESC, CT.is_pinned DESC, C.updated_at DESC LIMIT ?"
+	query = query + strings.Join(conditions, " AND ") + " ORDER BY CT.is_pinned DESC, C.updated_at DESC LIMIT ?"
 	values = append(values, count)
 
 	query = s.db.Rebind(query)

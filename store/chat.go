@@ -133,7 +133,7 @@ func (s *chatStore) Pin(ctx context.Context, chatID, userID string, isPinned boo
 	return nil
 }
 
-func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, includeNoMessage bool) ([]*models.ChatRoom, error) {
+func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, isOfficialRole bool) ([]*models.ChatRoom, error) {
 	chats := []*models.ChatRoom{}
 	if next == "" {
 		// +2 seconds to prevent the last chat is created at almost the same time with getting chats
@@ -171,12 +171,14 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		models.Deleted,
 	}
 
-	if includeNoMessage {
+	if isOfficialRole {
+		// 官方角色：沒有post_id的聊天室只能看到Pass(0)，其他所有聊天室Pass(0)和NeverGotMessages(1)都可以看到
+		conditions = append(conditions, "((C.post_id IS NULL AND CT.control_flag = ?) OR (C.post_id IS NOT NULL AND CT.control_flag IN (?, ?)))")
+		values = append(values, models.Pass, models.Pass, models.NeverGotMessages)
+	} else {
+		// 一般用戶：所有聊天室的Pass(0)和NeverGotMessages(1)都可以看到
 		conditions = append(conditions, "CT.control_flag IN (?, ?)")
 		values = append(values, models.Pass, models.NeverGotMessages)
-	} else {
-		conditions = append(conditions, "CT.control_flag = ?")
-		values = append(values, models.Pass)
 	}
 	if status != models.None {
 		conditions = append(conditions, "CT.status=?")

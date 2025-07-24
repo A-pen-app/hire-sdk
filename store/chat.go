@@ -172,11 +172,9 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 	}
 
 	if isOfficialRole {
-		// 官方角色：沒有post_id的聊天室只能看到Pass(0)，其他所有聊天室Pass(0)和NeverGotMessages(1)都可以看到
 		conditions = append(conditions, "((C.post_id IS NULL AND CT.control_flag = ?) OR (C.post_id IS NOT NULL AND CT.control_flag IN (?, ?)))")
 		values = append(values, models.Pass, models.Pass, models.NeverGotMessages)
 	} else {
-		// 一般用戶：所有聊天室的Pass(0)和NeverGotMessages(1)都可以看到
 		conditions = append(conditions, "CT.control_flag IN (?, ?)")
 		values = append(values, models.Pass, models.NeverGotMessages)
 	}
@@ -253,12 +251,13 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		}
 
 		// step 3: create new chat threads for both sender and receiver
+		pinned := postID == nil
 		query = `
-		INSERT INTO public.chat_thread (chat_id, sender_id, receiver_id, unread_count, control_flag)
-		VALUES (?, ?, ?, 0, ?)
+		INSERT INTO public.chat_thread (chat_id, sender_id, receiver_id, unread_count, control_flag,is_pinned)
+		VALUES (?, ?, ?, 0, ?, ?)
 		`
 		query = s.db.Rebind(query)
-		if _, err := tx.Exec(query, chatID, senderID, receiverID, models.NeverGotMessages); err != nil {
+		if _, err := tx.Exec(query, chatID, senderID, receiverID, models.NeverGotMessages, pinned); err != nil {
 			logging.Errorw(ctx, "insert new chat thread failed", "err", err, "senderID", senderID, "receiverID", receiverID)
 			return "", err
 		}

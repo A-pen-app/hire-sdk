@@ -265,9 +265,9 @@ type AudienceForm struct {
 }
 
 type GetOption struct {
-	Status           ChatAnnotation
-	UnreadOnly       bool
-	IncludeNoMessage bool
+	Status         ChatAnnotation
+	UnreadOnly     bool
+	IsOfficialRole bool
 }
 type GetOptionFunc func(*GetOption) error
 
@@ -285,9 +285,9 @@ func ByStatus(status ChatAnnotation, unreadOnly bool) GetOptionFunc {
 	}
 }
 
-func IncludeNoMessage() GetOptionFunc {
+func IsOfficialRole() GetOptionFunc {
 	return func(opt *GetOption) error {
-		opt.IncludeNoMessage = true
+		opt.IsOfficialRole = true
 		return nil
 	}
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 
@@ -28,7 +29,9 @@ func (s *subscriptionService) Get(ctx context.Context, bundleID, userID string) 
 
 	subscription, err := s.s.Get(ctx, app.ID, userID)
 	if err != nil {
-		logging.Errorw(ctx, "get subscription failed", "err", err, "app_id", app.ID, "user_id", userID)
+		if err != sql.ErrNoRows {
+			logging.Errorw(ctx, "get subscription failed", "err", err, "app_id", app.ID, "user_id", userID)
+		}
 		return nil, err
 	}
 

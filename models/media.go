@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"net/url"
+	"path/filepath"
 	"time"
 )
 
@@ -45,6 +46,16 @@ type MediaUpload struct {
 type URL string
 
 func (u URL) MarshalJSON() ([]byte, error) {
-	escaped := url.QueryEscape(string(u))
-	return json.Marshal(escaped)
+	urlStr := string(u)
+	if urlStr == "" {
+		return json.Marshal("")
+	}
+
+	dir, filename := filepath.Split(urlStr)
+
+	escapedFilename := url.PathEscape(filename)
+
+	result := dir + escapedFilename
+
+	return json.Marshal(result)
 }

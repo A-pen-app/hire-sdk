@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"net/url"
+	"time"
+)
 
 type MediaType int
 
@@ -12,15 +16,15 @@ const (
 )
 
 type Media struct {
-	ID         string  `json:"-" db:"id"`
-	URL        string  `json:"url" db:"url"`
-	PreviewURL *string `json:"preview_url" db:"preview_url"`
+	ID         string `json:"-" db:"id"`
+	URL        URL    `json:"url" db:"url"`
+	PreviewURL *URL   `json:"preview_url" db:"preview_url"`
 
 	Placeholder *string   `json:"placeholder,omitempty" db:"placeholder"`
 	Type        MediaType `json:"type" db:"type"`
 
 	// indicate the url to connect when user click the media
-	RedirectURL *string `json:"redirect_url,omitempty" db:"redirect_url"`
+	RedirectURL *URL    `json:"redirect_url,omitempty" db:"redirect_url"`
 	Title       *string `json:"title,omitempty" db:"title"`
 
 	Size      *string    `json:"size,omitempty" db:"size"`
@@ -36,4 +40,11 @@ type MediaUpload struct {
 	Title       *string    `json:"-"`
 	Size        *string    `json:"-"`
 	ExpiredAt   *time.Time `json:"-"`
+}
+
+type URL string
+
+func (u URL) MarshalJSON() ([]byte, error) {
+	escaped := url.QueryEscape(string(u))
+	return json.Marshal(escaped)
 }

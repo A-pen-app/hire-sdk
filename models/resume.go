@@ -61,7 +61,7 @@ const (
 	CollaborationType_FullTime          CollaborationType = iota // 全職
 	CollaborationType_PartTime                                   // 兼職
 	CollaborationType_Attending                                  // 掛牌
-	CollaborationType_Lecturer                                   // 講座
+	CollaborationType_Lecturer                                   // 講座講師
 	CollaborationType_Prescription                               // 葉配
 	CollaborationType_Endorsement                                // 代言
 	CollaborationType_Telemedicine                               // 遠距醫療
@@ -79,7 +79,7 @@ func (c CollaborationType) String() string {
 	case CollaborationType_Attending:
 		return "掛牌"
 	case CollaborationType_Lecturer:
-		return "講座"
+		return "講座講師"
 	case CollaborationType_Prescription:
 		return "葉配"
 	case CollaborationType_Endorsement:

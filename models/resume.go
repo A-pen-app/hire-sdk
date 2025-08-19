@@ -81,7 +81,7 @@ func (c CollaborationType) String() string {
 	case CollaborationType_Lecturer:
 		return "講座講師"
 	case CollaborationType_Prescription:
-		return "葉配"
+		return "業配"
 	case CollaborationType_Endorsement:
 		return "代言"
 	case CollaborationType_Telemedicine:

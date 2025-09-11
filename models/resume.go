@@ -40,8 +40,55 @@ type ResumeContent struct {
 }
 
 type HospitalExperience struct {
-	Department       *string `json:"department,omitempty"`
-	YearOfExperience int     `json:"year_of_experience"`
+	Department       *string              `json:"department,omitempty"`
+	YearOfExperience YearOfExperienceType `json:"year_of_experience"`
+}
+
+type YearOfExperienceType int
+
+const (
+	yearOfExperienceType_None YearOfExperienceType = iota
+	yearOfExperienceType_LessThanOne
+	yearOfExperienceType_OneToTwo
+	yearOfExperienceType_TwoToThree
+	yearOfExperienceType_ThreeToFour
+	yearOfExperienceType_FourToFive
+	yearOfExperienceType_FiveToSix
+	yearOfExperienceType_SixToSeven
+	yearOfExperienceType_SevenToEight
+	yearOfExperienceType_EightToNine
+	yearOfExperienceType_NineToTen
+	yearOfExperienceType_MoreThanTen
+)
+
+func (y YearOfExperienceType) Chinese() string {
+	switch y {
+	case yearOfExperienceType_None:
+		return "無經驗"
+	case yearOfExperienceType_LessThanOne:
+		return "1年以下"
+	case yearOfExperienceType_OneToTwo:
+		return "1年 ~ 2年"
+	case yearOfExperienceType_TwoToThree:
+		return "2年 ~ 3年"
+	case yearOfExperienceType_ThreeToFour:
+		return "3年 ~ 4年"
+	case yearOfExperienceType_FourToFive:
+		return "4年 ~ 5年"
+	case yearOfExperienceType_FiveToSix:
+		return "5年 ~ 6年"
+	case yearOfExperienceType_SixToSeven:
+		return "6年 ~ 7年"
+	case yearOfExperienceType_SevenToEight:
+		return "7年 ~ 8年"
+	case yearOfExperienceType_EightToNine:
+		return "8年 ~ 9年"
+	case yearOfExperienceType_NineToTen:
+		return "9年 ~ 10年"
+	case yearOfExperienceType_MoreThanTen:
+		return "10年以上"
+	}
+	return ""
 }
 
 type ContactTime struct {
@@ -70,7 +117,7 @@ const (
 	CollaborationType_ProductExperience                          // 產品體驗
 )
 
-func (c CollaborationType) String() string {
+func (c CollaborationType) Chinese() string {
 	switch c {
 	case CollaborationType_FullTime:
 		return "全職"

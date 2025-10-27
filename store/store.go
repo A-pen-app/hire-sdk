@@ -30,7 +30,7 @@ type Chat interface {
 	GetMessage(ctx context.Context, messageID string) (*models.Message, error)
 	GetMessages(ctx context.Context, chatID string, next string, count int) ([]*models.Message, error)
 	GetNewMessages(ctx context.Context, chatID string, after time.Time) ([]*models.Message, error)
-	GetFirstEmployerMessages(ctx context.Context, chatIDsWithJobSeekerIDs map[string]string) (map[string]*models.Message, error)
+	GetFirstMessages(ctx context.Context, opt []models.FirstMessageOption) (map[string]*models.Message, error)
 	AddMessage(ctx context.Context, userID, chatID, receiverID string, typ models.MessageType, body *string, mediaIDs []string, replyToMessageID *string, referenceID *string) (string, error)
 	AddMessages(ctx context.Context, userID, chatID, receiverID string, msgs []*models.Message) error
 	EditMessage(ctx context.Context, messageID string, newStatus models.MessageStatus) error

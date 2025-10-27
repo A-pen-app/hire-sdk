@@ -620,27 +620,16 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 	return msgs, nil
 }
 
-func (s *chatStore) GetFirstEmployerMessages(ctx context.Context, chatIDsWithJobSeekerIDs map[string]string) (map[string]*models.Message, error) {
-	if len(chatIDsWithJobSeekerIDs) == 0 {
+func (s *chatStore) GetFirstMessages(ctx context.Context, opt []models.FirstMessageOption) (map[string]*models.Message, error) {
+	if len(opt) == 0 {
 		return nil, nil
 	}
 
-	// Build arrays for the query with explicit pairing
-	type chatJobSeekerPair struct {
-		chatID      string
-		jobSeekerID string
-	}
-	pairs := make([]chatJobSeekerPair, 0, len(chatIDsWithJobSeekerIDs))
-	for chatID, jobSeekerID := range chatIDsWithJobSeekerIDs {
-		pairs = append(pairs, chatJobSeekerPair{chatID, jobSeekerID})
-	}
-
-	// Extract paired arrays
-	chatIDs := make([]string, len(pairs))
-	jobSeekerIDs := make([]string, len(pairs))
-	for i, pair := range pairs {
-		chatIDs[i] = pair.chatID
-		jobSeekerIDs[i] = pair.jobSeekerID
+	chatIDs := make([]string, len(opt))
+	excludedSenderIDs := make([]*string, len(opt))
+	for i, opt := range opt {
+		chatIDs[i] = opt.ChatID
+		excludedSenderIDs[i] = opt.ExcludedSenderID
 	}
 
 	// Use LATERAL join to get the first employer message for each chat_id
@@ -677,9 +666,9 @@ func (s *chatStore) GetFirstEmployerMessages(ctx context.Context, chatIDsWithJob
 	`
 	query = s.db.Rebind(query)
 
-	rows, err := s.db.Queryx(query, pq.Array(chatIDs), pq.Array(jobSeekerIDs))
+	rows, err := s.db.Queryx(query, pq.Array(chatIDs), pq.Array(excludedSenderIDs))
 	if err != nil {
-		logging.Errorw(ctx, "failed to get first employer messages", "err", err, "chatCount", len(chatIDsWithJobSeekerIDs))
+		logging.Errorw(ctx, "failed to get first employer messages", "err", err, "opt", opt)
 		return nil, err
 	}
 	defer rows.Close()

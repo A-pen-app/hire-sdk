@@ -102,15 +102,15 @@ func (s *resumeService) GetResponseMediansByPost(ctx context.Context, bundleID s
 
 	// Group relations by post_id and prepare job seeker IDs for batch query
 	postRelations := make(map[string][]*models.ResumeRelation)
-	chatIDsWithJobSeekerIDs := make(map[string]string)
+	opt := make([]models.FirstMessageOption, 0, len(relations))
 
 	for _, relation := range relations {
 		postRelations[relation.PostID] = append(postRelations[relation.PostID], relation)
-		chatIDsWithJobSeekerIDs[relation.ChatID] = relation.UserID
+		opt = append(opt, models.FirstMessageOption{ChatID: relation.ChatID, ExcludedSenderID: &relation.UserID})
 	}
 
 	// Batch fetch first employer messages for all chat rooms
-	firstMessages, err := s.c.GetFirstEmployerMessages(ctx, chatIDsWithJobSeekerIDs)
+	firstMessages, err := s.c.GetFirstMessages(ctx, opt)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get first employer messages", "err", err)
 		return nil, err

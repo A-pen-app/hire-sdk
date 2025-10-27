@@ -622,7 +622,7 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 
 func (s *chatStore) GetFirstEmployerMessages(ctx context.Context, chatIDsWithJobSeekerIDs map[string]string) (map[string]*models.Message, error) {
 	if len(chatIDsWithJobSeekerIDs) == 0 {
-		return make(map[string]*models.Message), nil
+		return nil, nil
 	}
 
 	// Build arrays for the query with explicit pairing
@@ -700,7 +700,7 @@ func (s *chatStore) GetFirstEmployerMessages(ctx context.Context, chatIDsWithJob
 			&msg.RefID,
 		); err != nil {
 			logging.Errorw(ctx, "failed to scan message", "err", err)
-			continue
+			return nil, err
 		}
 		result[msg.ChatID] = &msg
 	}

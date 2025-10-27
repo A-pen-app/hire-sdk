@@ -123,7 +123,7 @@ func (s *resumeService) GetResponseMediansByPost(ctx context.Context, bundleID s
 
 		for _, rel := range rels {
 			// Check if employer has replied
-			if firstEmployerMessage, exists := firstMessages[rel.ChatID]; exists {
+			if firstEmployerMessage, exists := firstMessages[rel.ChatID]; exists && firstEmployerMessage != nil {
 				responseTime := firstEmployerMessage.CreatedAt.Sub(rel.CreatedAt).Hours()
 				samples = append(samples, responseTime)
 			}

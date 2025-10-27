@@ -619,3 +619,91 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 
 	return msgs, nil
 }
+
+func (s *chatStore) GetFirstEmployerMessages(ctx context.Context, chatIDsWithJobSeekerIDs map[string]string) (map[string]*models.Message, error) {
+	if len(chatIDsWithJobSeekerIDs) == 0 {
+		return make(map[string]*models.Message), nil
+	}
+
+	// Build arrays for the query with explicit pairing
+	type chatJobSeekerPair struct {
+		chatID      string
+		jobSeekerID string
+	}
+	pairs := make([]chatJobSeekerPair, 0, len(chatIDsWithJobSeekerIDs))
+	for chatID, jobSeekerID := range chatIDsWithJobSeekerIDs {
+		pairs = append(pairs, chatJobSeekerPair{chatID, jobSeekerID})
+	}
+
+	// Extract paired arrays
+	chatIDs := make([]string, len(pairs))
+	jobSeekerIDs := make([]string, len(pairs))
+	for i, pair := range pairs {
+		chatIDs[i] = pair.chatID
+		jobSeekerIDs[i] = pair.jobSeekerID
+	}
+
+	// Use LATERAL join to get the first employer message for each chat_id
+	query := `
+	SELECT
+		m.id,
+		m.type,
+		m.body,
+		m.chat_id,
+		m.sender_id,
+		m.created_at,
+		m.reply_to_message_id,
+		m.status,
+		m.media_ids,
+		m.reference_id
+	FROM unnest(?::text[], ?::text[]) AS input(chat_id, job_seeker_id)
+	CROSS JOIN LATERAL (
+		SELECT
+			id,
+			type,
+			body,
+			chat_id,
+			sender_id,
+			created_at,
+			reply_to_message_id,
+			status,
+			media_ids,
+			reference_id
+		FROM public.message
+		WHERE chat_id = input.chat_id AND sender_id != input.job_seeker_id
+		ORDER BY created_at ASC
+		LIMIT 1
+	) m
+	`
+	query = s.db.Rebind(query)
+
+	rows, err := s.db.Queryx(query, pq.Array(chatIDs), pq.Array(jobSeekerIDs))
+	if err != nil {
+		logging.Errorw(ctx, "failed to get first employer messages", "err", err, "chatCount", len(chatIDsWithJobSeekerIDs))
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]*models.Message)
+	for rows.Next() {
+		msg := models.Message{}
+		if err := rows.Scan(
+			&msg.ID,
+			&msg.Type,
+			&msg.Body,
+			&msg.ChatID,
+			&msg.SenderID,
+			&msg.CreatedAt,
+			&msg.ReplyToMessageID,
+			&msg.Status,
+			pq.Array(&msg.MediaIDs),
+			&msg.RefID,
+		); err != nil {
+			logging.Errorw(ctx, "failed to scan message", "err", err)
+			continue
+		}
+		result[msg.ChatID] = &msg
+	}
+
+	return result, nil
+}

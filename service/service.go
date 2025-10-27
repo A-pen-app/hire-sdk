@@ -12,6 +12,7 @@ type Resume interface {
 	Get(ctx context.Context, bundleID, userID string) (*models.Resume, error)
 	GetUserAppliedPostIDs(ctx context.Context, bundleID, userID string) ([]string, error)
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error)
+	GetResponseMediansByPost(ctx context.Context, bundleID string, after time.Time) (map[string]float64, error)
 }
 
 type Chat interface {

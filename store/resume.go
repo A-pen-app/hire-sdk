@@ -325,6 +325,41 @@ func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelatio
 	return &relation, nil
 }
 
+func (s *resumeStore) ListRelations(ctx context.Context, appID string, after *time.Time) ([]*models.ResumeRelation, error) {
+	query := `
+	SELECT
+		id,
+		app_id,
+		user_id,
+		snapshot_id,
+		post_id,
+		chat_id,
+		is_read,
+		created_at,
+		updated_at,
+		status
+	FROM public.resume_relation
+	WHERE app_id = ?`
+
+	var args []interface{}
+	args = append(args, appID)
+
+	if after != nil {
+		query += ` AND created_at >= ?`
+		args = append(args, *after)
+	}
+
+	query = s.db.Rebind(query)
+
+	var relations []*models.ResumeRelation
+	err := s.db.Select(&relations, query, args...)
+	if err != nil {
+		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", appID, "after", after)
+		return nil, err
+	}
+	return relations, nil
+}
+
 func (s *resumeStore) Read(ctx context.Context, snapshotID string) error {
 	query := `
 	UPDATE public.resume_relation

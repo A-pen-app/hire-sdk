@@ -16,6 +16,7 @@ type Resume interface {
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error)
 	CreateRelation(ctx context.Context, appID, userID string, snapshotID string, chatID string, postID string, status models.ResumeStatus) (*models.ResumeRelation, error)
 	GetRelation(ctx context.Context, opts ...models.GetRelationOptionFunc) (*models.ResumeRelation, error)
+	ListRelations(ctx context.Context, appID string, after *time.Time) ([]*models.ResumeRelation, error)
 	Read(ctx context.Context, snapshotID string) error
 	UpdateRelationStatus(ctx context.Context, snapshotID string, status models.ResumeStatus) error
 	UpdateRelationListStatus(ctx context.Context, postIDs []string, status models.ResumeStatus) error
@@ -29,6 +30,7 @@ type Chat interface {
 	GetMessage(ctx context.Context, messageID string) (*models.Message, error)
 	GetMessages(ctx context.Context, chatID string, next string, count int) ([]*models.Message, error)
 	GetNewMessages(ctx context.Context, chatID string, after time.Time) ([]*models.Message, error)
+	GetFirstMessages(ctx context.Context, opt []models.FirstMessageOption) (map[string]*models.Message, error)
 	AddMessage(ctx context.Context, userID, chatID, receiverID string, typ models.MessageType, body *string, mediaIDs []string, replyToMessageID *string, referenceID *string) (string, error)
 	AddMessages(ctx context.Context, userID, chatID, receiverID string, msgs []*models.Message) error
 	EditMessage(ctx context.Context, messageID string, newStatus models.MessageStatus) error

@@ -339,3 +339,8 @@ func ReplyTo(replyToMessageID string) SendOptionFunc {
 		return nil
 	}
 }
+
+type FirstMessageOption struct {
+	ChatID           string
+	ExcludedSenderID *string
+}

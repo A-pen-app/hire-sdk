@@ -619,3 +619,80 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 
 	return msgs, nil
 }
+
+func (s *chatStore) GetFirstMessages(ctx context.Context, opt []models.FirstMessageOption) (map[string]*models.Message, error) {
+	if len(opt) == 0 {
+		return nil, nil
+	}
+
+	chatIDs := make([]string, len(opt))
+	excludedSenderIDs := make([]*string, len(opt))
+	for i, opt := range opt {
+		chatIDs[i] = opt.ChatID
+		excludedSenderIDs[i] = opt.ExcludedSenderID
+	}
+
+	// Use LATERAL join to get the first employer message for each chat_id
+	query := `
+	SELECT
+		m.id,
+		m.type,
+		m.body,
+		m.chat_id,
+		m.sender_id,
+		m.created_at,
+		m.reply_to_message_id,
+		m.status,
+		m.media_ids,
+		m.reference_id
+	FROM unnest(?::text[], ?::text[]) AS input(chat_id, job_seeker_id)
+	CROSS JOIN LATERAL (
+		SELECT
+			id,
+			type,
+			body,
+			chat_id,
+			sender_id,
+			created_at,
+			reply_to_message_id,
+			status,
+			media_ids,
+			reference_id
+		FROM public.message
+		WHERE chat_id = input.chat_id AND sender_id != input.job_seeker_id
+		ORDER BY created_at ASC
+		LIMIT 1
+	) m
+	`
+	query = s.db.Rebind(query)
+
+	rows, err := s.db.Queryx(query, pq.Array(chatIDs), pq.Array(excludedSenderIDs))
+	if err != nil {
+		logging.Errorw(ctx, "failed to get first employer messages", "err", err, "opt", opt)
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]*models.Message)
+	for rows.Next() {
+		msg := models.Message{}
+		if err := rows.Scan(
+			&msg.ID,
+			&msg.Type,
+			&msg.Body,
+			&msg.ChatID,
+			&msg.SenderID,
+			&msg.CreatedAt,
+			&msg.ReplyToMessageID,
+			&msg.Status,
+			pq.Array(&msg.MediaIDs),
+			&msg.RefID,
+		); err != nil {
+			logging.Errorw(ctx, "failed to scan message", "err", err)
+			return nil, err
+		}
+		result[msg.ChatID] = &msg
+	}
+
+	return result, nil
+}

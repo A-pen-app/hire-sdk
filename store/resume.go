@@ -292,6 +292,14 @@ func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelatio
 		conditions = append(conditions, "snapshot_id=?")
 		params = append(params, *opt.SnapshotID)
 	}
+	if opt.UserID != nil {
+		conditions = append(conditions, "user_id=?")
+		params = append(params, *opt.UserID)
+	}
+	if opt.PostID != nil {
+		conditions = append(conditions, "post_id=?")
+		params = append(params, *opt.PostID)
+	}
 
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")

@@ -207,6 +207,8 @@ func (r *ResumeContent) Scan(value interface{}) error {
 type GetRelationOption struct {
 	ChatID     *string
 	SnapshotID *string
+	UserID     *string
+	PostID     *string
 }
 type GetRelationOptionFunc func(*GetRelationOption) error
 
@@ -220,6 +222,20 @@ func ByChat(chatID string) GetRelationOptionFunc {
 func BySnapshot(snapshotID string) GetRelationOptionFunc {
 	return func(opt *GetRelationOption) error {
 		opt.SnapshotID = &snapshotID
+		return nil
+	}
+}
+
+func ByUserID(userID string) GetRelationOptionFunc {
+	return func(opt *GetRelationOption) error {
+		opt.UserID = &userID
+		return nil
+	}
+}
+
+func ByPostID(postID string) GetRelationOptionFunc {
+	return func(opt *GetRelationOption) error {
+		opt.PostID = &postID
 		return nil
 	}
 }

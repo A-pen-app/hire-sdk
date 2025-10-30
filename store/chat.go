@@ -659,7 +659,7 @@ func (s *chatStore) GetFirstMessages(ctx context.Context, opt []models.FirstMess
 			media_ids,
 			reference_id
 		FROM public.message
-		WHERE chat_id = input.chat_id AND sender_id != input.job_seeker_id
+		WHERE chat_id = input.chat_id::uuid AND sender_id != input.job_seeker_id::uuid
 		ORDER BY created_at ASC
 		LIMIT 1
 	) m

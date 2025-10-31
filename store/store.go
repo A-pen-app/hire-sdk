@@ -14,6 +14,7 @@ type Resume interface {
 	Update(ctx context.Context, appID, userID string, resume *models.ResumeContent) error
 	CreateSnapshot(ctx context.Context, appID, userID string) (*models.ResumeSnapshot, error)
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error)
+	ListSnapshots(ctx context.Context, snapshotIDs []string) ([]*models.ResumeSnapshot, error)
 	CreateRelation(ctx context.Context, appID, userID string, snapshotID string, chatID string, postID string, status models.ResumeStatus) (*models.ResumeRelation, error)
 	GetRelation(ctx context.Context, opts ...models.GetRelationOptionFunc) (*models.ResumeRelation, error)
 	ListRelations(ctx context.Context, appID string, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, error)

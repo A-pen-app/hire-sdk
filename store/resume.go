@@ -209,6 +209,27 @@ func (s *resumeStore) GetSnapshot(ctx context.Context, snapshotID string) (*mode
 	return &snapshot, nil
 }
 
+func (s *resumeStore) ListSnapshots(ctx context.Context, snapshotIDs []string) ([]*models.ResumeSnapshot, error) {
+	query := `
+	SELECT 
+		id,
+		resume_id,
+		content,
+		created_at
+	FROM public.resume_snapshot
+	WHERE id = ANY(?)
+	`
+	query = s.db.Rebind(query)
+
+	var snapshots []*models.ResumeSnapshot
+	err := s.db.Select(&snapshots, query, pq.Array(snapshotIDs))
+	if err != nil {
+		logging.Errorw(ctx, "failed to list resume snapshots", "err", err, "snapshotIDs", snapshotIDs)
+		return nil, err
+	}
+	return snapshots, nil
+}
+
 func (s *resumeStore) CreateRelation(ctx context.Context, appID, userID string, snapshotID string, chatID string, postID string, status models.ResumeStatus) (*models.ResumeRelation, error) {
 	relationID := uuid.New().String()
 	now := time.Now()

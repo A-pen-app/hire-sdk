@@ -94,7 +94,7 @@ func (s *resumeService) GetResponseMediansByPost(ctx context.Context, bundleID s
 	}
 
 	// Get all resume relations for this app (filtered by time)
-	relations, err := s.r.ListRelations(ctx, app.ID, &after)
+	relations, err := s.r.ListRelations(ctx, app.ID, models.ByAfter(after))
 	if err != nil {
 		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", app.ID)
 		return nil, err

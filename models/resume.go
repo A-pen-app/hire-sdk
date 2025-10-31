@@ -239,3 +239,23 @@ func ByPostID(postID string) GetRelationOptionFunc {
 		return nil
 	}
 }
+
+type ListRelationOption struct {
+	After   *time.Time
+	ChatIDs []string
+}
+type ListRelationOptionFunc func(*ListRelationOption) error
+
+func ByAfter(after time.Time) ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		opt.After = &after
+		return nil
+	}
+}
+
+func ByChatIDs(chatIDs []string) ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		opt.ChatIDs = chatIDs
+		return nil
+	}
+}

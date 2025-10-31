@@ -333,7 +333,15 @@ func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelatio
 	return &relation, nil
 }
 
-func (s *resumeStore) ListRelations(ctx context.Context, appID string, after *time.Time) ([]*models.ResumeRelation, error) {
+func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, error) {
+	opt := models.ListRelationOption{}
+	for _, f := range opts {
+		if err := f(&opt); err != nil {
+			logging.Errorw(ctx, "failed to apply list relation option", "err", err)
+			return nil, err
+		}
+	}
+
 	query := `
 	SELECT
 		id,
@@ -352,9 +360,14 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, after *ti
 	var args []interface{}
 	args = append(args, appID)
 
-	if after != nil {
+	if opt.After != nil {
 		query += ` AND created_at >= ?`
-		args = append(args, *after)
+		args = append(args, *opt.After)
+	}
+
+	if len(opt.ChatIDs) > 0 {
+		query += ` AND chat_id = ANY(?)`
+		args = append(args, pq.Array(opt.ChatIDs))
 	}
 
 	query = s.db.Rebind(query)
@@ -362,7 +375,7 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, after *ti
 	var relations []*models.ResumeRelation
 	err := s.db.Select(&relations, query, args...)
 	if err != nil {
-		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", appID, "after", after)
+		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", appID, "opts", opts)
 		return nil, err
 	}
 	return relations, nil

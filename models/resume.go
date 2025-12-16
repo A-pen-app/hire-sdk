@@ -109,7 +109,7 @@ const (
 	CollaborationType_PartTime                                   // 兼職
 	CollaborationType_Attending                                  // 掛牌
 	CollaborationType_Lecturer                                   // 講座講師
-	CollaborationType_Prescription                               // 葉配
+	CollaborationType_Prescription                               // 業配
 	CollaborationType_Endorsement                                // 代言
 	CollaborationType_Telemedicine                               // 遠距醫療
 	CollaborationType_MarketResearch                             // 市調訪談

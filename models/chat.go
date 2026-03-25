@@ -19,6 +19,8 @@ const (
 	MsgMeetup
 	MsgFile
 	MsgPost
+	MsgBusinessCard
+	MsgResume
 )
 
 func (t MessageType) String() string {
@@ -35,6 +37,10 @@ func (t MessageType) String() string {
 		return "file"
 	case MsgPost:
 		return "post"
+	case MsgBusinessCard:
+		return "business_card"
+	case MsgResume:
+		return "resume"
 	default:
 		return "unknown"
 	}
@@ -154,6 +160,12 @@ type Message struct {
 	Audience    *AudienceForm `json:"audience,omitempty" db:"-" `
 
 	Link *string `json:"link,omitempty" db:"-" example:"apen://mp_chats/{chat_id} or https://www.google.com.tw/"`
+
+	// Type=MsgBusinessCard
+	BusinessCard *BusinessCardContent `json:"business_card,omitempty" db:"-"`
+
+	// Type=MsgResume
+	Resume *ResumeContent `json:"resume,omitempty" db:"-"`
 }
 
 type ChatAnnotation int
@@ -205,6 +217,7 @@ type ChatRoom struct {
 	Role           Role                `json:"role" db:"-"`
 	HireStatus     *HireStatus         `json:"hire_status" db:"-" default:"INACTIVE" example:"INACTIVE"`
 	ResumeSnapshot *ChatResumeSnapshot `json:"resume_snapshot" db:"-"`
+	HireContact    *HireContact        `json:"hire_contact,omitempty" db:"hire_contact"`
 }
 
 func (p ChatRoom) Feedtype() feedmodel.FeedType {
@@ -343,4 +356,34 @@ func ReplyTo(replyToMessageID string) SendOptionFunc {
 type FirstMessageOption struct {
 	ChatID           string
 	ExcludedSenderID *string
+}
+
+type NewChatOption struct {
+	Resume       *ResumeContent
+	ResumeStatus ResumeStatus
+	Card         *BusinessCardContent
+	Contact      *HireContact
+}
+type NewChatOptionFunc func(*NewChatOption) error
+
+func WithResume(resume *ResumeContent, status ResumeStatus) NewChatOptionFunc {
+	return func(opt *NewChatOption) error {
+		opt.Resume = resume
+		opt.ResumeStatus = status
+		return nil
+	}
+}
+
+func WithCard(card *BusinessCardContent) NewChatOptionFunc {
+	return func(opt *NewChatOption) error {
+		opt.Card = card
+		return nil
+	}
+}
+
+func WithContact(contact *HireContact) NewChatOptionFunc {
+	return func(opt *NewChatOption) error {
+		opt.Contact = contact
+		return nil
+	}
 }

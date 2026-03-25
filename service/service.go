@@ -16,13 +16,18 @@ type Resume interface {
 }
 
 type Chat interface {
-	New(ctx context.Context, bundleID, senderID, receiverID string, postID *string, resume *models.ResumeContent, resumeStatus models.ResumeStatus) (string, error)
+	New(ctx context.Context, bundleID, senderID, receiverID string, postID *string, options ...models.NewChatOptionFunc) (string, error)
 	Get(ctx context.Context, bundleID, chatID, userID string) (*models.ChatRoom, error)
 	GetChats(ctx context.Context, bundleID, userID string, next string, count int, options ...models.GetOptionFunc) ([]*models.ChatRoom, string, error)
 	GetChatMessages(ctx context.Context, bundleID, userID, chatID string, next string, count int) ([]*models.Message, string, error)
 	FetchNewMessages(ctx context.Context, bundleID, userID, chatID string, lastMessageID string) ([]*models.Message, error)
 	SendMessage(ctx context.Context, bundleID, userID, chatID string, options ...models.SendOptionFunc) (*models.Message, error)
 	UnsendMessage(ctx context.Context, bundleID, userID, messageID string) error
+}
+
+type BusinessCardService interface {
+	Get(ctx context.Context, bundleID, userID string) (*models.BusinessCardContent, error)
+	Update(ctx context.Context, bundleID, userID string, card *models.BusinessCardContent) (*models.BusinessCardContent, error)
 }
 
 type Agreement interface {

@@ -11,43 +11,68 @@ import (
 )
 
 type chatService struct {
-	c store.Chat
-	r store.Resume
-	a store.App
-	m store.Media
-	s store.Subscription
+	c  store.Chat
+	r  store.Resume
+	a  store.App
+	m  store.Media
+	s  store.Subscription
+	bc store.BusinessCard
 }
 
-func NewChat(c store.Chat, r store.Resume, a store.App, m store.Media, s store.Subscription) Chat {
+func NewChat(c store.Chat, r store.Resume, a store.App, m store.Media, s store.Subscription, bc store.BusinessCard) Chat {
 	return &chatService{
-		c: c,
-		r: r,
-		a: a,
-		m: m,
-		s: s,
+		c:  c,
+		r:  r,
+		a:  a,
+		m:  m,
+		s:  s,
+		bc: bc,
 	}
 }
 
-func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID string, postID *string, resume *models.ResumeContent, resumeStatus models.ResumeStatus) (string, error) {
+func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID string, postID *string, options ...models.NewChatOptionFunc) (string, error) {
+	opt := models.NewChatOption{}
+	for _, f := range options {
+		if err := f(&opt); err != nil {
+			logging.Errorw(ctx, "failed to apply new chat option", "err", err)
+			return "", err
+		}
+	}
+
 	app, err := s.a.GetByBundleID(ctx, bundleID)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
 		return "", err
 	}
 
-	chatID, err := s.c.GetChatID(ctx, app.ID, senderID, receiverID, postID)
+	chatID, created, err := s.c.GetChatID(ctx, app.ID, senderID, receiverID, postID)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get chat ID", "err", err, "appID", app.ID, "senderID", senderID, "receiverID", receiverID)
 		return "", err
 	}
 
-	if resume != nil {
+	if opt.Contact != nil {
+		if err := s.c.UpdateHireContact(ctx, chatID, opt.Contact); err != nil {
+			logging.Errorw(ctx, "failed to update hire contact", "err", err, "chatID", chatID)
+			return "", err
+		}
+	}
+
+	// MsgPost is sent when the chat is newly created and has a postID
+	if created && postID != nil {
+		if _, err := s.c.AddMessage(ctx, senderID, chatID, receiverID, models.MsgPost, nil, nil, nil, postID); err != nil {
+			logging.Errorw(ctx, "failed to add post message", "err", err, "chatID", chatID, "senderID", senderID, "receiverID", receiverID)
+			return "", err
+		}
+	}
+
+	if opt.Resume != nil {
 		if postID == nil {
 			return "", models.ErrorWrongParams
 		}
 
 		// Update the user's resume
-		if err := s.r.Update(ctx, app.ID, senderID, resume); err != nil {
+		if err := s.r.Update(ctx, app.ID, senderID, opt.Resume); err != nil {
 			logging.Errorw(ctx, "failed to update resume", "err", err, "appID", app.ID, "senderID", senderID)
 			return "", err
 		}
@@ -60,17 +85,31 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 		}
 
 		// Create a relation between the resume snapshot and the chat room
-		if _, err := s.r.CreateRelation(ctx, app.ID, senderID, snapshot.ID, chatID, *postID, resumeStatus); err != nil {
+		if _, err := s.r.CreateRelation(ctx, app.ID, senderID, snapshot.ID, chatID, *postID, opt.ResumeStatus); err != nil {
 			logging.Errorw(ctx, "failed to create resume relation", "err", err, "snapshotID", snapshot.ID, "chatID", chatID, "postID", *postID)
 			return "", err
 		}
 
-		// Add a message indicating a post has been sent
-		if _, err := s.c.AddMessage(ctx, senderID, chatID, receiverID, models.MsgPost, nil, nil, nil, postID); err != nil {
-			logging.Errorw(ctx, "failed to add post message", "err", err, "chatID", chatID, "senderID", senderID, "receiverID", receiverID)
+		// Add a resume message with reference_id pointing to the snapshot
+		if _, err := s.c.AddMessage(ctx, senderID, chatID, receiverID, models.MsgResume, nil, nil, nil, &snapshot.ID); err != nil {
+			logging.Errorw(ctx, "failed to add resume message", "err", err, "chatID", chatID, "senderID", senderID, "receiverID", receiverID)
+			return "", err
+		}
+	}
+
+	if opt.Card != nil {
+		// Create a business card bcSnapshot
+		bcSnapshot, err := s.bc.CreateSnapshot(ctx, app.ID, senderID, opt.Card)
+		if err != nil {
+			logging.Errorw(ctx, "failed to create business card snapshot", "err", err, "appID", app.ID, "senderID", senderID)
 			return "", err
 		}
 
+		// Add a business card message with reference_id pointing to the snapshot
+		if _, err := s.c.AddMessage(ctx, senderID, chatID, receiverID, models.MsgBusinessCard, nil, nil, nil, &bcSnapshot.ID); err != nil {
+			logging.Errorw(ctx, "failed to add business card message", "err", err, "chatID", chatID, "senderID", senderID)
+			return "", err
+		}
 	}
 
 	return chatID, nil
@@ -423,6 +462,22 @@ func (s *chatService) injectContent(ctx context.Context, userID string, msg *mod
 		//TODO: inject form
 	case models.MsgMeetup:
 		//TODO: inject meetup
+	case models.MsgBusinessCard:
+		if msg.RefID != nil {
+			snapshot, err := s.bc.GetSnapshot(ctx, *msg.RefID)
+			if err != nil {
+				return err
+			}
+			msg.BusinessCard = snapshot.Content
+		}
+	case models.MsgResume:
+		if msg.RefID != nil {
+			snapshot, err := s.r.GetSnapshot(ctx, *msg.RefID)
+			if err != nil {
+				return err
+			}
+			msg.Resume = snapshot.Content
+		}
 	}
 
 	if injectReplyTo && msg.ReplyToMessageID != nil {

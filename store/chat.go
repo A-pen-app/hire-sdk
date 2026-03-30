@@ -26,9 +26,9 @@ func NewChat(db *sqlx.DB) Chat {
 func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*models.ChatRoom, error) {
 	chat := models.ChatRoom{}
 	query := `
-	SELECT 
-		CT.chat_id, 
-		CT.sender_id, 
+	SELECT
+		CT.chat_id,
+		CT.sender_id,
 		CT.receiver_id,
 		C.app_id,
 		C.last_message_id,
@@ -40,6 +40,7 @@ func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*mod
 		C.created_at,
 		C.post_id,
 		CT.is_pinned,
+		C.business_card_snapshot_id,
 		C.hire_contact
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
@@ -141,9 +142,9 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		next = strconv.FormatInt(time.Now().Unix()+2, 10)
 	}
 	query := `
-	SELECT 
-		CT.chat_id, 
-		CT.sender_id, 
+	SELECT
+		CT.chat_id,
+		CT.sender_id,
 		CT.receiver_id,
 		C.app_id,
 		C.last_message_id,
@@ -155,6 +156,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		C.created_at,
 		C.post_id,
 		CT.is_pinned,
+		C.business_card_snapshot_id,
 		C.hire_contact
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
@@ -713,4 +715,36 @@ func (s *chatStore) UpdateHireContact(ctx context.Context, chatID string, contac
 	}
 
 	return nil
+}
+
+func (s *chatStore) UpdateBusinessCardSnapshotID(ctx context.Context, chatID, snapshotID string) error {
+	query := `
+	UPDATE public.chat SET business_card_snapshot_id=?
+	WHERE id=?
+	`
+	query = s.db.Rebind(query)
+	if _, err := s.db.Exec(query, snapshotID, chatID); err != nil {
+		logging.Errorw(ctx, "update business card snapshot id failed", "err", err, "chatID", chatID, "snapshotID", snapshotID)
+		return err
+	}
+	return nil
+}
+
+func (s *chatStore) GetUserChattingPostIDs(ctx context.Context, appID, userID string) ([]string, error) {
+	query := `
+	SELECT C.post_id
+	FROM public.chat C
+	JOIN public.chat_thread CT ON C.id = CT.chat_id
+	WHERE C.app_id = ? AND CT.sender_id = ?
+	  AND C.business_card_snapshot_id IS NOT NULL
+	  AND C.post_id IS NOT NULL
+	`
+	query = s.db.Rebind(query)
+
+	var postIDs []string
+	if err := s.db.SelectContext(ctx, &postIDs, query, appID, userID); err != nil {
+		logging.Errorw(ctx, "failed to get chatting post ids", "err", err, "appID", appID, "userID", userID)
+		return nil, err
+	}
+	return postIDs, nil
 }

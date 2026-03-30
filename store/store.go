@@ -38,6 +38,8 @@ type Chat interface {
 	Annotate(ctx context.Context, chatID, userID string, status models.ChatAnnotation) error
 	Pin(ctx context.Context, chatID, userID string, isPinned bool) error
 	UpdateHireContact(ctx context.Context, chatID string, contact *models.HireContact) error
+	UpdateBusinessCardSnapshotID(ctx context.Context, chatID, snapshotID string) error
+	GetUserChattingPostIDs(ctx context.Context, appID, userID string) ([]string, error)
 }
 
 type BusinessCard interface {

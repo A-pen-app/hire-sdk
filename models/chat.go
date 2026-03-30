@@ -195,6 +195,13 @@ func (s ChatAnnotation) MarshalJSON() ([]byte, error) {
 	return json.Marshal(str)
 }
 
+type AccessStatus string
+
+const (
+	AccessStatusLocked   AccessStatus = "LOCKED"
+	AccessStatusUnlocked AccessStatus = "UNLOCKED"
+)
+
 type ChatRoom struct {
 	//chat_thread
 	ChatID      string          `json:"chat_id" db:"chat_id"`
@@ -208,16 +215,19 @@ type ChatRoom struct {
 	IsPinned    bool            `json:"is_pinned" db:"is_pinned"`
 
 	//chat
-	AppID          string              `json:"-" db:"app_id"`
-	CreatedAt      time.Time           `json:"created_at" db:"created_at" example:"2023-10-01T04:00:00Z"`
-	UpdatedAt      time.Time           `json:"-" db:"updated_at"`
-	LastMessageID  *string             `json:"-" db:"last_message_id"`
-	LastMessage    *Message            `json:"last_message" db:"-"`
-	PostID         *string             `json:"post_id" db:"post_id"`
-	Role           Role                `json:"role" db:"-"`
-	HireStatus     *HireStatus         `json:"hire_status" db:"-" default:"INACTIVE" example:"INACTIVE"`
-	ResumeSnapshot *ChatResumeSnapshot `json:"resume_snapshot" db:"-"`
-	HireContact    *HireContact        `json:"hire_contact,omitempty" db:"hire_contact"`
+	AppID                  string                `json:"-" db:"app_id"`
+	CreatedAt              time.Time             `json:"created_at" db:"created_at" example:"2023-10-01T04:00:00Z"`
+	UpdatedAt              time.Time             `json:"-" db:"updated_at"`
+	LastMessageID          *string               `json:"-" db:"last_message_id"`
+	LastMessage            *Message              `json:"last_message" db:"-"`
+	PostID                 *string               `json:"post_id" db:"post_id"`
+	BusinessCardSnapshotID *string               `json:"-" db:"business_card_snapshot_id"`
+	Role                   Role                  `json:"role" db:"-"`
+	HireStatus             *HireStatus           `json:"hire_status" db:"-" default:"INACTIVE" example:"INACTIVE"`
+	AccessStatus           AccessStatus          `json:"access_status" db:"-"`
+	ResumeSnapshot         *ChatResumeSnapshot   `json:"resume_snapshot" db:"-"`
+	BusinessCardSnapshot   *BusinessCardSnapshot `json:"business_card_snapshot" db:"-"`
+	HireContact            *HireContact          `json:"hire_contact" db:"hire_contact"`
 }
 
 func (p ChatRoom) Feedtype() feedmodel.FeedType {

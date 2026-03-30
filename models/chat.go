@@ -195,12 +195,23 @@ func (s ChatAnnotation) MarshalJSON() ([]byte, error) {
 	return json.Marshal(str)
 }
 
-type AccessStatus string
+type AccessStatus int
 
 const (
-	AccessStatusLocked   AccessStatus = "LOCKED"
-	AccessStatusUnlocked AccessStatus = "UNLOCKED"
+	AccessStatusLocked   AccessStatus = iota // 0
+	AccessStatusUnlocked                     // 1
 )
+
+func (a AccessStatus) MarshalJSON() ([]byte, error) {
+	str := ""
+	switch a {
+	case AccessStatusLocked:
+		str = "LOCKED"
+	case AccessStatusUnlocked:
+		str = "UNLOCKED"
+	}
+	return json.Marshal(str)
+}
 
 type ChatRoom struct {
 	//chat_thread

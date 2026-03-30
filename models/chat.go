@@ -224,7 +224,7 @@ type ChatRoom struct {
 	BusinessCardSnapshotID *string               `json:"-" db:"business_card_snapshot_id"`
 	Role                   Role                  `json:"role" db:"-"`
 	HireStatus             *HireStatus           `json:"hire_status" db:"-" default:"INACTIVE" example:"INACTIVE"`
-	AccessStatus           AccessStatus          `json:"access_status" db:"-"`
+	AccessStatus           AccessStatus          `json:"access_status" db:"access_status"`
 	ResumeSnapshot         *ChatResumeSnapshot   `json:"resume_snapshot" db:"-"`
 	BusinessCardSnapshot   *BusinessCardSnapshot `json:"business_card_snapshot" db:"-"`
 	HireContact            *HireContact          `json:"hire_contact" db:"hire_contact"`
@@ -370,16 +370,22 @@ type FirstMessageOption struct {
 
 type NewChatOption struct {
 	Resume       *ResumeContent
-	ResumeStatus ResumeStatus
 	Card         *BusinessCardContent
 	Contact      *HireContact
+	AccessStatus *AccessStatus
 }
 type NewChatOptionFunc func(*NewChatOption) error
 
-func WithResume(resume *ResumeContent, status ResumeStatus) NewChatOptionFunc {
+func WithResume(resume *ResumeContent) NewChatOptionFunc {
 	return func(opt *NewChatOption) error {
 		opt.Resume = resume
-		opt.ResumeStatus = status
+		return nil
+	}
+}
+
+func WithAccessStatus(status AccessStatus) NewChatOptionFunc {
+	return func(opt *NewChatOption) error {
+		opt.AccessStatus = &status
 		return nil
 	}
 }

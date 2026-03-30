@@ -39,6 +39,7 @@ type Chat interface {
 	Pin(ctx context.Context, chatID, userID string, isPinned bool) error
 	UpdateHireContact(ctx context.Context, chatID string, contact *models.HireContact) error
 	UpdateBusinessCardSnapshotID(ctx context.Context, chatID, snapshotID string) error
+	UpdateAccessStatus(ctx context.Context, chatID string, status models.AccessStatus) error
 	GetUserChattingPostIDs(ctx context.Context, appID, userID string) ([]string, error)
 }
 

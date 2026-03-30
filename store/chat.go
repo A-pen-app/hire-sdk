@@ -41,6 +41,7 @@ func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*mod
 		C.post_id,
 		CT.is_pinned,
 		C.business_card_snapshot_id,
+		C.access_status,
 		C.hire_contact
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
@@ -157,6 +158,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		C.post_id,
 		CT.is_pinned,
 		C.business_card_snapshot_id,
+		C.access_status,
 		C.hire_contact
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
@@ -725,6 +727,19 @@ func (s *chatStore) UpdateBusinessCardSnapshotID(ctx context.Context, chatID, sn
 	query = s.db.Rebind(query)
 	if _, err := s.db.Exec(query, snapshotID, chatID); err != nil {
 		logging.Errorw(ctx, "update business card snapshot id failed", "err", err, "chatID", chatID, "snapshotID", snapshotID)
+		return err
+	}
+	return nil
+}
+
+func (s *chatStore) UpdateAccessStatus(ctx context.Context, chatID string, status models.AccessStatus) error {
+	query := `
+	UPDATE public.chat SET access_status=?
+	WHERE id=?
+	`
+	query = s.db.Rebind(query)
+	if _, err := s.db.Exec(query, status, chatID); err != nil {
+		logging.Errorw(ctx, "update access status failed", "err", err, "chatID", chatID, "status", status)
 		return err
 	}
 	return nil

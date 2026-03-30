@@ -66,6 +66,14 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 		}
 	}
 
+	// Set access_status from caller
+	if opt.AccessStatus != nil {
+		if err := s.c.UpdateAccessStatus(ctx, chatID, *opt.AccessStatus); err != nil {
+			logging.Errorw(ctx, "failed to update access status", "err", err, "chatID", chatID)
+			return "", err
+		}
+	}
+
 	if opt.Resume != nil {
 		if postID == nil {
 			return "", models.ErrorWrongParams
@@ -84,8 +92,13 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 			return "", err
 		}
 
-		// Create a relation between the resume snapshot and the chat room
-		if _, err := s.r.CreateRelation(ctx, app.ID, senderID, snapshot.ID, chatID, *postID, opt.ResumeStatus); err != nil {
+		// Create a relation: derive ResumeStatus from AccessStatus
+		resumeStatus := models.ResumeStatusLocked
+		if opt.AccessStatus != nil && *opt.AccessStatus == models.AccessStatusUnlocked {
+			resumeStatus = models.ResumeStatusUnlocked
+		}
+
+		if _, err := s.r.CreateRelation(ctx, app.ID, senderID, snapshot.ID, chatID, *postID, resumeStatus); err != nil {
 			logging.Errorw(ctx, "failed to create resume relation", "err", err, "snapshotID", snapshot.ID, "chatID", chatID, "postID", *postID)
 			return "", err
 		}
@@ -147,21 +160,21 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 	}
 
 	if chat.PostID != nil {
-		// Subscription: query once
-		isSubscribed := false
-		if userID != chat.SenderID {
+		// AccessStatus: 求職方永遠 UNLOCKED，徵才方看 subscription + DB 值
+		if userID == chat.SenderID {
+			chat.AccessStatus = models.AccessStatusUnlocked
+		} else {
 			subscription, err := s.s.Get(ctx, app.ID, userID)
 			if err != nil && err != sql.ErrNoRows {
 				logging.Errorw(ctx, "failed to get subscription", "err", err, "appID", app.ID, "userID", userID)
 				return nil, err
 			}
 			if subscription != nil && subscription.Status.HasOneOf(models.SubscriptionSubscribed) {
-				isSubscribed = true
+				chat.AccessStatus = models.AccessStatusUnlocked
 			}
 		}
 
 		// Resume
-		var resumeStatus *models.ResumeStatus
 		relation, err := s.r.GetRelation(ctx, models.ByChat(chatID))
 		if err != nil && err != sql.ErrNoRows {
 			logging.Errorw(ctx, "failed to get resume relation", "err", err, "chatID", chatID)
@@ -169,16 +182,6 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 		}
 
 		if relation != nil {
-			status := models.ResumeStatusLocked
-			if userID == relation.UserID {
-				status = models.ResumeStatusUnlocked
-			} else if isSubscribed {
-				status = models.ResumeStatusUnlocked
-			} else {
-				status = relation.Status
-			}
-			resumeStatus = &status
-
 			snapshot, err := s.r.GetSnapshot(ctx, relation.SnapshotID)
 			if err != nil {
 				logging.Errorw(ctx, "failed to get resume snapshot", "err", err, "snapshotID", relation.SnapshotID)
@@ -189,7 +192,7 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 				ID:      snapshot.ID,
 				Content: snapshot.Content,
 				IsRead:  relation.IsRead,
-				Status:  status,
+				Status:  toResumeStatus(chat.AccessStatus),
 			}
 		}
 
@@ -201,17 +204,6 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 				return nil, err
 			}
 			chat.BusinessCardSnapshot = bcSnapshot
-		}
-
-		// AccessStatus
-		if resumeStatus != nil {
-			chat.AccessStatus = toAccessStatus(*resumeStatus)
-		} else if chat.BusinessCardSnapshotID != nil {
-			if isSubscribed {
-				chat.AccessStatus = models.AccessStatusUnlocked
-			} else {
-				chat.AccessStatus = models.AccessStatusLocked
-			}
 		}
 	}
 
@@ -288,19 +280,14 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 		}
 
 		if chats[i].PostID != nil {
-			// Resume
-			var hasResume bool
-			if relation, ok := resumeRelationMap[chats[i].ChatID]; ok {
-				hasResume = true
-				status := models.ResumeStatusLocked
-				if userID == relation.UserID {
-					status = models.ResumeStatusUnlocked
-				} else if isSubscribed {
-					status = models.ResumeStatusUnlocked
-				} else {
-					status = relation.Status
-				}
+			if userID == chats[i].SenderID {
+				chats[i].AccessStatus = models.AccessStatusUnlocked
+			} else if isSubscribed {
+				chats[i].AccessStatus = models.AccessStatusUnlocked
+			}
 
+			// Resume
+			if relation, ok := resumeRelationMap[chats[i].ChatID]; ok {
 				snapshot, err := s.r.GetSnapshot(ctx, relation.SnapshotID)
 				if err != nil {
 					logging.Errorw(ctx, "get resume snapshot failed", "err", err, "snapshotID", relation.SnapshotID)
@@ -311,9 +298,8 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 					ID:      snapshot.ID,
 					Content: snapshot.Content,
 					IsRead:  relation.IsRead,
-					Status:  status,
+					Status:  toResumeStatus(chats[i].AccessStatus),
 				}
-				chats[i].AccessStatus = toAccessStatus(status)
 			}
 
 			// Business card
@@ -324,15 +310,6 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 					continue
 				}
 				chats[i].BusinessCardSnapshot = bcSnapshot
-			}
-
-			// AccessStatus: 沒有履歷時從 subscription 判斷
-			if !hasResume && chats[i].BusinessCardSnapshotID != nil {
-				if isSubscribed {
-					chats[i].AccessStatus = models.AccessStatusUnlocked
-				} else {
-					chats[i].AccessStatus = models.AccessStatusLocked
-				}
 			}
 		}
 	}
@@ -492,11 +469,11 @@ func (s *chatService) UnsendMessage(ctx context.Context, bundleID, userID, messa
 	return nil
 }
 
-func toAccessStatus(status models.ResumeStatus) models.AccessStatus {
-	if status == models.ResumeStatusUnlocked {
-		return models.AccessStatusUnlocked
+func toResumeStatus(status models.AccessStatus) models.ResumeStatus {
+	if status == models.AccessStatusUnlocked {
+		return models.ResumeStatusUnlocked
 	}
-	return models.AccessStatusLocked
+	return models.ResumeStatusLocked
 }
 
 // aggregateLastMessage processes the last message with business logic (without user info)

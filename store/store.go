@@ -42,6 +42,7 @@ type Chat interface {
 	UpdateAccessStatus(ctx context.Context, chatID string, status models.AccessStatus) error
 	GetUserChattingPostIDs(ctx context.Context, appID, userID string) ([]string, error)
 	GetBusinessCardChats(ctx context.Context, appID string, before time.Duration) ([]*models.BusinessCardChat, error)
+	GetBusinessCardSnapshotIDs(ctx context.Context, chatIDs []string) (map[string]string, error)
 }
 
 type BusinessCard interface {
@@ -49,6 +50,7 @@ type BusinessCard interface {
 	Upsert(ctx context.Context, appID, userID string, card *models.BusinessCardContent) error
 	CreateSnapshot(ctx context.Context, appID, userID string, card *models.BusinessCardContent) (*models.BusinessCardSnapshot, error)
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.BusinessCardSnapshot, error)
+	ListSnapshots(ctx context.Context, snapshotIDs []string) ([]*models.BusinessCardSnapshot, error)
 }
 
 type App interface {

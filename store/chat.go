@@ -785,3 +785,35 @@ func (s *chatStore) GetUserChattingPostIDs(ctx context.Context, appID, userID st
 	}
 	return postIDs, nil
 }
+
+func (s *chatStore) GetBusinessCardSnapshotIDs(ctx context.Context, chatIDs []string) (map[string]string, error) {
+	if len(chatIDs) == 0 {
+		return map[string]string{}, nil
+	}
+
+	type row struct {
+		ChatID     string  `db:"id"`
+		SnapshotID *string `db:"business_card_snapshot_id"`
+	}
+
+	query := `
+	SELECT id, business_card_snapshot_id
+	FROM public.chat
+	WHERE id = ANY(?) AND business_card_snapshot_id IS NOT NULL
+	`
+	query = s.db.Rebind(query)
+
+	var rows []row
+	if err := s.db.SelectContext(ctx, &rows, query, pq.Array(chatIDs)); err != nil {
+		logging.Errorw(ctx, "failed to get business card snapshot ids", "err", err)
+		return nil, err
+	}
+
+	m := make(map[string]string, len(rows))
+	for _, r := range rows {
+		if r.SnapshotID != nil {
+			m[r.ChatID] = *r.SnapshotID
+		}
+	}
+	return m, nil
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/A-pen-app/logging"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 type businessCard struct {
@@ -140,4 +141,24 @@ func (s *businessCard) GetSnapshot(ctx context.Context, snapshotID string) (*mod
 	}
 
 	return &snapshot, nil
+}
+
+func (s *businessCard) ListSnapshots(ctx context.Context, snapshotIDs []string) ([]*models.BusinessCardSnapshot, error) {
+	if len(snapshotIDs) == 0 {
+		return nil, nil
+	}
+
+	query := `
+	SELECT id, business_card_id, content, created_at
+	FROM public.business_card_snapshot
+	WHERE id = ANY(?)
+	`
+	query = s.db.Rebind(query)
+
+	var snapshots []*models.BusinessCardSnapshot
+	if err := s.db.SelectContext(ctx, &snapshots, query, pq.Array(snapshotIDs)); err != nil {
+		logging.Errorw(ctx, "failed to list business card snapshots", "err", err, "snapshotIDs", snapshotIDs)
+		return nil, err
+	}
+	return snapshots, nil
 }

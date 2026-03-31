@@ -745,6 +745,28 @@ func (s *chatStore) UpdateAccessStatus(ctx context.Context, chatID string, statu
 	return nil
 }
 
+func (s *chatStore) GetBusinessCardChats(ctx context.Context, appID string, before time.Duration) ([]*models.BusinessCardChat, error) {
+	query := `
+	SELECT C.id AS chat_id, CT.sender_id, CT.receiver_id, C.post_id
+	FROM public.chat C
+	JOIN public.chat_thread CT ON C.id = CT.chat_id
+	WHERE C.app_id = ?
+	  AND C.business_card_snapshot_id IS NOT NULL
+	  AND C.post_id IS NOT NULL
+	  AND C.created_at < ?
+	  AND CT.sender_id != CT.receiver_id
+	`
+	query = s.db.Rebind(query)
+
+	threshold := time.Now().Add(-before)
+	var chats []*models.BusinessCardChat
+	if err := s.db.SelectContext(ctx, &chats, query, appID, threshold); err != nil {
+		logging.Errorw(ctx, "failed to get business card chats", "err", err, "appID", appID)
+		return nil, err
+	}
+	return chats, nil
+}
+
 func (s *chatStore) GetUserChattingPostIDs(ctx context.Context, appID, userID string) ([]string, error) {
 	query := `
 	SELECT C.post_id

@@ -11,7 +11,9 @@ go get github.com/A-pen-app/hire-sdk
 ## Features
 
 - **Resume Management**: Create, update, and retrieve user resumes with support for doctors, pharmacists, and nurses
-- **Chat System**: Real-time messaging between recruiters and job seekers with support for text, images, files, forms, and meetups
+- **Business Card**: Lightweight profile card for chat-first flow, supporting doctors, pharmacists, and nurses
+- **Chat System**: Real-time messaging between recruiters and job seekers with support for text, images, files, forms, meetups, business cards, and resumes
+- **Access Control**: Chat room access status (LOCKED/UNLOCKED) based on subscription and one-time ticket
 - **User Agreements**: Manage user consent and agreement versions
 - **Subscription Management**: Handle user subscription status and expiration
 
@@ -46,17 +48,36 @@ type Resume interface {
 - Pharmacist-specific: current organization, job title, alma mater, graduation year
 - Nurse-specific: birth year, certificate, hospital experience
 
+### Business Card Service
+
+Manage lightweight business cards for chat-first flow:
+
+```go
+type BusinessCardService interface {
+    // Get user's business card content
+    Get(ctx context.Context, bundleID, userID string) (*models.BusinessCardContent, error)
+
+    // Create or update business card
+    Update(ctx context.Context, bundleID, userID string, card *models.BusinessCardContent) (*models.BusinessCardContent, error)
+}
+```
+
+**Business Card Content** supports multiple professions:
+- Common: real name
+- Doctor: position, departments
+- Pharmacist/Nurse: current organization, current job title
+
 ### Chat Service
 
 Comprehensive chat system for recruiter-job seeker communication:
 
 ```go
 type Chat interface {
-    // Create new chat room
+    // Create new chat room with options (resume, business card, contact, access status)
     New(ctx context.Context, bundleID, senderID, receiverID string, postID *string,
-        resume *models.ResumeContent, resumeStatus models.ResumeStatus) (string, error)
+        options ...models.NewChatOptionFunc) (string, error)
 
-    // Get chat room details
+    // Get chat room details (includes access_status, resume_snapshot, business_card_snapshot)
     Get(ctx context.Context, bundleID, chatID, userID string) (*models.ChatRoom, error)
 
     // List user's chat rooms with pagination
@@ -80,6 +101,21 @@ type Chat interface {
 }
 ```
 
+**New Chat Options**:
+```go
+// With resume (full application)
+models.WithResume(resume)
+
+// With business card (chat-first)
+models.WithCard(card)
+
+// With hire contact info
+models.WithContact(contact)
+
+// With access status (based on subscription)
+models.WithAccessStatus(models.AccessStatusUnlocked)
+```
+
 **Supported Message Types**:
 - Text messages
 - Images
@@ -87,6 +123,8 @@ type Chat interface {
 - Forms (surveys/questionnaires)
 - Meetups (scheduled events)
 - Post references
+- Business cards (type 7)
+- Resumes (type 8)
 
 **Chat Filtering Options**:
 ```go
@@ -175,6 +213,10 @@ type Subscription interface {
 - `Unsent`: Message not sent
 - `Deleted`: Message deleted by sender/receiver
 - `Unavailable`: Message unavailable
+
+**Access Status**:
+- `AccessStatusLocked` (0): Chat not unlocked (recruiter hasn't paid)
+- `AccessStatusUnlocked` (1): Chat unlocked (via subscription or one-time ticket)
 
 **Chat Annotations**:
 - `None`: Regular chat

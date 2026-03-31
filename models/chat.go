@@ -374,6 +374,13 @@ func ReplyTo(replyToMessageID string) SendOptionFunc {
 	}
 }
 
+type BusinessCardChat struct {
+	ChatID     string `db:"chat_id"`
+	SenderID   string `db:"sender_id"`
+	ReceiverID string `db:"receiver_id"`
+	PostID     string `db:"post_id"`
+}
+
 type FirstMessageOption struct {
 	ChatID           string
 	ExcludedSenderID *string

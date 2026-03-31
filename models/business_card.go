@@ -9,9 +9,16 @@ import (
 
 // BusinessCardContent represents the JSONB content of a business card
 type BusinessCardContent struct {
-	RealName    *string  `json:"real_name,omitempty"`
+	// common
+	RealName *string `json:"real_name,omitempty"`
+
+	// for doctor
 	Position    *string  `json:"position,omitempty"`
 	Departments []string `json:"departments,omitempty"`
+
+	// for pharmacist and nurse
+	CurrentOrganization *string `json:"current_organization,omitempty"`
+	CurrentJobTitle     *string `json:"current_job_title,omitempty"`
 }
 
 // Value implements the driver.Valuer interface for inserting as jsonb

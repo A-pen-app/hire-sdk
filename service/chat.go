@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"strconv"
+	"time"
 
 	"github.com/A-pen-app/hire-sdk/models"
 	"github.com/A-pen-app/hire-sdk/store"
@@ -467,6 +468,46 @@ func (s *chatService) UnsendMessage(ctx context.Context, bundleID, userID, messa
 	}
 
 	return nil
+}
+
+func (s *chatService) GetBusinessCardOnly(ctx context.Context, bundleID string, before time.Duration) ([]*models.BusinessCardChat, error) {
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return nil, err
+	}
+
+	bcChats, err := s.c.GetBusinessCardChats(ctx, app.ID, before)
+	if err != nil {
+		return nil, err
+	}
+	if len(bcChats) == 0 {
+		return nil, nil
+	}
+
+	chatIDs := make([]string, len(bcChats))
+	for i, c := range bcChats {
+		chatIDs[i] = c.ChatID
+	}
+
+	resumeRelations, err := s.r.ListRelations(ctx, app.ID, models.ByChatIDs(chatIDs))
+	if err != nil {
+		return nil, err
+	}
+
+	hasResumeMap := map[string]struct{}{}
+	for _, rel := range resumeRelations {
+		hasResumeMap[rel.ChatID] = struct{}{}
+	}
+
+	var result []*models.BusinessCardChat
+	for _, c := range bcChats {
+		if _, ok := hasResumeMap[c.ChatID]; !ok {
+			result = append(result, c)
+		}
+	}
+
+	return result, nil
 }
 
 func toResumeStatus(status models.AccessStatus) models.ResumeStatus {

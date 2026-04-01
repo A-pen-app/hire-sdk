@@ -381,6 +381,11 @@ type BusinessCardChat struct {
 	PostID     string `db:"post_id"`
 }
 
+type BusinessCardChatInfo struct {
+	SnapshotID string
+	PostID     string
+}
+
 type FirstMessageOption struct {
 	ChatID           string
 	ExcludedSenderID *string

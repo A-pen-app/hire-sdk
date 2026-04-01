@@ -786,18 +786,19 @@ func (s *chatStore) GetUserChattingPostIDs(ctx context.Context, appID, userID st
 	return postIDs, nil
 }
 
-func (s *chatStore) GetBusinessCardSnapshotIDs(ctx context.Context, chatIDs []string) (map[string]string, error) {
+func (s *chatStore) GetBusinessCardChatInfos(ctx context.Context, chatIDs []string) (map[string]*models.BusinessCardChatInfo, error) {
 	if len(chatIDs) == 0 {
-		return map[string]string{}, nil
+		return map[string]*models.BusinessCardChatInfo{}, nil
 	}
 
 	type row struct {
 		ChatID     string  `db:"id"`
 		SnapshotID *string `db:"business_card_snapshot_id"`
+		PostID     *string `db:"post_id"`
 	}
 
 	query := `
-	SELECT id, business_card_snapshot_id
+	SELECT id, business_card_snapshot_id, post_id
 	FROM public.chat
 	WHERE id = ANY(?) AND business_card_snapshot_id IS NOT NULL
 	`
@@ -805,14 +806,18 @@ func (s *chatStore) GetBusinessCardSnapshotIDs(ctx context.Context, chatIDs []st
 
 	var rows []row
 	if err := s.db.SelectContext(ctx, &rows, query, pq.Array(chatIDs)); err != nil {
-		logging.Errorw(ctx, "failed to get business card snapshot ids", "err", err)
+		logging.Errorw(ctx, "failed to get business card chat infos", "err", err)
 		return nil, err
 	}
 
-	m := make(map[string]string, len(rows))
+	m := make(map[string]*models.BusinessCardChatInfo, len(rows))
 	for _, r := range rows {
 		if r.SnapshotID != nil {
-			m[r.ChatID] = *r.SnapshotID
+			info := &models.BusinessCardChatInfo{SnapshotID: *r.SnapshotID}
+			if r.PostID != nil {
+				info.PostID = *r.PostID
+			}
+			m[r.ChatID] = info
 		}
 	}
 	return m, nil

@@ -243,6 +243,12 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 
 		created = true
 		chatID = uuid.New().String()
+
+		accessStatus := models.AccessStatusLocked
+		if opt.AccessStatus != nil {
+			accessStatus = *opt.AccessStatus
+		}
+
 		// step 2: create a new chat
 		var query2 string
 		var args2 []interface{}
@@ -250,12 +256,12 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 			query2 = `
 			INSERT INTO public.chat (id, app_id, hire_contact, access_status, created_at, updated_at)
 			VALUES (?, ?, ?, ?, now(), now())`
-			args2 = []interface{}{chatID, appID, opt.Contact, opt.AccessStatus}
+			args2 = []interface{}{chatID, appID, opt.Contact, accessStatus}
 		} else {
 			query2 = `
 			INSERT INTO public.chat (id, app_id, post_id, hire_contact, access_status, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, now(), now())`
-			args2 = []interface{}{chatID, appID, *postID, opt.Contact, opt.AccessStatus}
+			args2 = []interface{}{chatID, appID, *postID, opt.Contact, accessStatus}
 		}
 		query2 = s.db.Rebind(query2)
 		if _, err := tx.Exec(query2, args2...); err != nil {

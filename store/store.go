@@ -26,7 +26,7 @@ type Resume interface {
 type Chat interface {
 	Get(ctx context.Context, appID, chatID, userID string) (*models.ChatRoom, error)
 	GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, includeNoMessage bool) ([]*models.ChatRoom, error)
-	GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string) (string, bool, error)
+	GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error)
 	Read(ctx context.Context, userID, chatID string) error
 	GetMessage(ctx context.Context, messageID string) (*models.Message, error)
 	GetMessages(ctx context.Context, chatID string, next string, count int) ([]*models.Message, error)

@@ -391,6 +391,24 @@ type FirstMessageOption struct {
 	ExcludedSenderID *string
 }
 
+type GetChatIDOption struct {
+	Contact      *HireContact
+	AccessStatus *AccessStatus
+}
+type GetChatIDOptionFunc func(*GetChatIDOption)
+
+func WithChatContact(contact *HireContact) GetChatIDOptionFunc {
+	return func(opt *GetChatIDOption) {
+		opt.Contact = contact
+	}
+}
+
+func WithChatAccessStatus(status AccessStatus) GetChatIDOptionFunc {
+	return func(opt *GetChatIDOption) {
+		opt.AccessStatus = &status
+	}
+}
+
 type NewChatOption struct {
 	Resume       *ResumeContent
 	Card         *BusinessCardContent

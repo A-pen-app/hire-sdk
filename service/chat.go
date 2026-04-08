@@ -46,31 +46,24 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 		return "", err
 	}
 
-	chatID, created, err := s.c.GetChatID(ctx, app.ID, senderID, receiverID, postID)
+	var chatOpts []models.GetChatIDOptionFunc
+	if opt.Contact != nil {
+		chatOpts = append(chatOpts, models.WithChatContact(opt.Contact))
+	}
+	if opt.AccessStatus != nil {
+		chatOpts = append(chatOpts, models.WithChatAccessStatus(*opt.AccessStatus))
+	}
+
+	chatID, created, err := s.c.GetChatID(ctx, app.ID, senderID, receiverID, postID, chatOpts...)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get chat ID", "err", err, "appID", app.ID, "senderID", senderID, "receiverID", receiverID)
 		return "", err
-	}
-
-	if opt.Contact != nil {
-		if err := s.c.UpdateHireContact(ctx, chatID, opt.Contact); err != nil {
-			logging.Errorw(ctx, "failed to update hire contact", "err", err, "chatID", chatID)
-			return "", err
-		}
 	}
 
 	// MsgPost is sent when the chat is newly created and has a postID
 	if created && postID != nil {
 		if _, err := s.c.AddMessage(ctx, senderID, chatID, receiverID, models.MsgPost, nil, nil, nil, postID); err != nil {
 			logging.Errorw(ctx, "failed to add post message", "err", err, "chatID", chatID, "senderID", senderID, "receiverID", receiverID)
-			return "", err
-		}
-	}
-
-	// Set access_status from caller
-	if opt.AccessStatus != nil {
-		if err := s.c.UpdateAccessStatus(ctx, chatID, *opt.AccessStatus); err != nil {
-			logging.Errorw(ctx, "failed to update access status", "err", err, "chatID", chatID)
 			return "", err
 		}
 	}

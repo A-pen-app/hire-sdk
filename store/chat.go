@@ -203,7 +203,12 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 	return chats, nil
 }
 
-func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string) (string, bool, error) {
+func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error) {
+	opt := models.GetChatIDOption{}
+	for _, f := range opts {
+		f(&opt)
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		logging.Errorw(ctx, "begin tx failed", "err", err)
@@ -243,14 +248,14 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		var args2 []interface{}
 		if postID == nil {
 			query2 = `
-			INSERT INTO public.chat (id, app_id, created_at, updated_at)
-			VALUES (?, ?, now(), now())`
-			args2 = []interface{}{chatID, appID}
+			INSERT INTO public.chat (id, app_id, hire_contact, access_status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, now(), now())`
+			args2 = []interface{}{chatID, appID, opt.Contact, opt.AccessStatus}
 		} else {
 			query2 = `
-			INSERT INTO public.chat (id, app_id, post_id, created_at, updated_at)
-			VALUES (?, ?, ?, now(), now())`
-			args2 = []interface{}{chatID, appID, *postID}
+			INSERT INTO public.chat (id, app_id, post_id, hire_contact, access_status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, now(), now())`
+			args2 = []interface{}{chatID, appID, *postID, opt.Contact, opt.AccessStatus}
 		}
 		query2 = s.db.Rebind(query2)
 		if _, err := tx.Exec(query2, args2...); err != nil {
@@ -283,6 +288,27 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 	} else if err != nil {
 		logging.Errorw(ctx, "get existing chat ID failed", "err", err, "appID", appID, "senderID", senderID, "receiverID", receiverID)
 		return "", false, err
+	} else {
+		// chat already exists, update contact and access_status if provided
+		setClauses := []string{}
+		updateArgs := []interface{}{}
+		if opt.Contact != nil {
+			setClauses = append(setClauses, "hire_contact=?")
+			updateArgs = append(updateArgs, opt.Contact)
+		}
+		if opt.AccessStatus != nil {
+			setClauses = append(setClauses, "access_status=?")
+			updateArgs = append(updateArgs, *opt.AccessStatus)
+		}
+		if len(setClauses) > 0 {
+			query = `UPDATE public.chat SET ` + strings.Join(setClauses, ", ") + ` WHERE id=?`
+			updateArgs = append(updateArgs, chatID)
+			query = s.db.Rebind(query)
+			if _, err := tx.Exec(query, updateArgs...); err != nil {
+				logging.Errorw(ctx, "update chat options failed", "err", err, "chatID", chatID)
+				return "", false, err
+			}
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

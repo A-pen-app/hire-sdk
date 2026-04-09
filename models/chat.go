@@ -392,14 +392,21 @@ type FirstMessageOption struct {
 }
 
 type GetChatIDOption struct {
-	Contact      *HireContact
-	AccessStatus *AccessStatus
+	RecruiterContact *HireContact
+	JobSeekerContact *HireContact
+	AccessStatus     *AccessStatus
 }
 type GetChatIDOptionFunc func(*GetChatIDOption)
 
-func WithChatContact(contact *HireContact) GetChatIDOptionFunc {
+func WithChatRecruiterContact(contact *HireContact) GetChatIDOptionFunc {
 	return func(opt *GetChatIDOption) {
-		opt.Contact = contact
+		opt.RecruiterContact = contact
+	}
+}
+
+func WithChatJobSeekerContact(contact *HireContact) GetChatIDOptionFunc {
+	return func(opt *GetChatIDOption) {
+		opt.JobSeekerContact = contact
 	}
 }
 
@@ -410,10 +417,11 @@ func WithChatAccessStatus(status AccessStatus) GetChatIDOptionFunc {
 }
 
 type NewChatOption struct {
-	Resume       *ResumeContent
-	Card         *BusinessCardContent
-	Contact      *HireContact
-	AccessStatus *AccessStatus
+	Resume           *ResumeContent
+	Card             *BusinessCardContent
+	RecruiterContact *HireContact
+	JobSeekerContact *HireContact
+	AccessStatus     *AccessStatus
 }
 type NewChatOptionFunc func(*NewChatOption) error
 
@@ -438,9 +446,16 @@ func WithCard(card *BusinessCardContent) NewChatOptionFunc {
 	}
 }
 
-func WithContact(contact *HireContact) NewChatOptionFunc {
+func WithRecruiterContact(contact *HireContact) NewChatOptionFunc {
 	return func(opt *NewChatOption) error {
-		opt.Contact = contact
+		opt.RecruiterContact = contact
+		return nil
+	}
+}
+
+func WithJobSeekerContact(contact *HireContact) NewChatOptionFunc {
+	return func(opt *NewChatOption) error {
+		opt.JobSeekerContact = contact
 		return nil
 	}
 }

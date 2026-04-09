@@ -47,8 +47,8 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 	}
 
 	var chatOpts []models.GetChatIDOptionFunc
-	if opt.Contact != nil {
-		chatOpts = append(chatOpts, models.WithChatContact(opt.Contact))
+	if opt.RecruiterContact != nil {
+		chatOpts = append(chatOpts, models.WithChatRecruiterContact(opt.RecruiterContact))
 	}
 	if opt.AccessStatus != nil {
 		chatOpts = append(chatOpts, models.WithChatAccessStatus(*opt.AccessStatus))

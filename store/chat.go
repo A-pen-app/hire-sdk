@@ -286,7 +286,7 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		VALUES (?, ?, ?, 0, ?, ?)
 		`
 		query = s.db.Rebind(query)
-		if _, err := tx.Exec(query, chatID, receiverID, senderID, models.NeverGotMessages, opt.Contact); err != nil {
+		if _, err := tx.Exec(query, chatID, receiverID, senderID, models.NeverGotMessages, opt.RecruiterContact); err != nil {
 			logging.Errorw(ctx, "insert new chat thread (reversed) failed", "err", err, "senderID", receiverID, "receiverID", senderID)
 			return "", false, err
 		}
@@ -296,9 +296,9 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		return "", false, err
 	} else {
 		// chat already exists, update contact on receiver's thread and access_status on chat
-		if opt.Contact != nil {
+		if opt.RecruiterContact != nil {
 			query = s.db.Rebind(`UPDATE public.chat_thread SET hire_contact=? WHERE chat_id=? AND sender_id=?`)
-			if _, err := tx.Exec(query, opt.Contact, chatID, receiverID); err != nil {
+			if _, err := tx.Exec(query, opt.RecruiterContact, chatID, receiverID); err != nil {
 				logging.Errorw(ctx, "update receiver hire_contact failed", "err", err, "chatID", chatID)
 				return "", false, err
 			}

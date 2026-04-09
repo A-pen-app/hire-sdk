@@ -37,7 +37,7 @@ type Chat interface {
 	EditMessage(ctx context.Context, messageID string, newStatus models.MessageStatus) error
 	Annotate(ctx context.Context, chatID, userID string, status models.ChatAnnotation) error
 	Pin(ctx context.Context, chatID, userID string, isPinned bool) error
-	UpdateHireContact(ctx context.Context, chatID string, contact *models.HireContact) error
+	UpdateHireContact(ctx context.Context, chatID string, userID string, contact *models.HireContact) error
 	UpdateBusinessCardSnapshotID(ctx context.Context, chatID, snapshotID string) error
 	UpdateAccessStatus(ctx context.Context, chatID string, status models.AccessStatus) error
 	GetUserChattingPostIDs(ctx context.Context, appID, userID string) ([]string, error)

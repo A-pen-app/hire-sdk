@@ -42,7 +42,7 @@ func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*mod
 		CT.is_pinned,
 		C.business_card_snapshot_id,
 		C.access_status,
-		C.hire_contact
+		CT.hire_contact
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
@@ -159,7 +159,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		CT.is_pinned,
 		C.business_card_snapshot_id,
 		C.access_status,
-		C.hire_contact
+		CT.hire_contact
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
@@ -254,14 +254,14 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		var args2 []interface{}
 		if postID == nil {
 			query2 = `
-			INSERT INTO public.chat (id, app_id, hire_contact, access_status, created_at, updated_at)
-			VALUES (?, ?, ?, ?, now(), now())`
-			args2 = []interface{}{chatID, appID, opt.Contact, accessStatus}
+			INSERT INTO public.chat (id, app_id, access_status, created_at, updated_at)
+			VALUES (?, ?, ?, now(), now())`
+			args2 = []interface{}{chatID, appID, accessStatus}
 		} else {
 			query2 = `
-			INSERT INTO public.chat (id, app_id, post_id, hire_contact, access_status, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, now(), now())`
-			args2 = []interface{}{chatID, appID, *postID, opt.Contact, accessStatus}
+			INSERT INTO public.chat (id, app_id, post_id, access_status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, now(), now())`
+			args2 = []interface{}{chatID, appID, *postID, accessStatus}
 		}
 		query2 = s.db.Rebind(query2)
 		if _, err := tx.Exec(query2, args2...); err != nil {
@@ -282,11 +282,11 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		}
 
 		query = `
-		INSERT INTO public.chat_thread (chat_id, sender_id, receiver_id, unread_count, control_flag)
-		VALUES (?, ?, ?, 0, ?)
+		INSERT INTO public.chat_thread (chat_id, sender_id, receiver_id, unread_count, control_flag, hire_contact)
+		VALUES (?, ?, ?, 0, ?, ?)
 		`
 		query = s.db.Rebind(query)
-		if _, err := tx.Exec(query, chatID, receiverID, senderID, models.NeverGotMessages); err != nil {
+		if _, err := tx.Exec(query, chatID, receiverID, senderID, models.NeverGotMessages, opt.Contact); err != nil {
 			logging.Errorw(ctx, "insert new chat thread (reversed) failed", "err", err, "senderID", receiverID, "receiverID", senderID)
 			return "", false, err
 		}
@@ -295,23 +295,18 @@ func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID s
 		logging.Errorw(ctx, "get existing chat ID failed", "err", err, "appID", appID, "senderID", senderID, "receiverID", receiverID)
 		return "", false, err
 	} else {
-		// chat already exists, update contact and access_status if provided
-		setClauses := []string{}
-		updateArgs := []interface{}{}
+		// chat already exists, update contact on receiver's thread and access_status on chat
 		if opt.Contact != nil {
-			setClauses = append(setClauses, "hire_contact=?")
-			updateArgs = append(updateArgs, opt.Contact)
+			query = s.db.Rebind(`UPDATE public.chat_thread SET hire_contact=? WHERE chat_id=? AND sender_id=?`)
+			if _, err := tx.Exec(query, opt.Contact, chatID, receiverID); err != nil {
+				logging.Errorw(ctx, "update receiver hire_contact failed", "err", err, "chatID", chatID)
+				return "", false, err
+			}
 		}
 		if opt.AccessStatus != nil {
-			setClauses = append(setClauses, "access_status=?")
-			updateArgs = append(updateArgs, *opt.AccessStatus)
-		}
-		if len(setClauses) > 0 {
-			query = `UPDATE public.chat SET ` + strings.Join(setClauses, ", ") + ` WHERE id=?`
-			updateArgs = append(updateArgs, chatID)
-			query = s.db.Rebind(query)
-			if _, err := tx.Exec(query, updateArgs...); err != nil {
-				logging.Errorw(ctx, "update chat options failed", "err", err, "chatID", chatID)
+			query = s.db.Rebind(`UPDATE public.chat SET access_status=? WHERE id=?`)
+			if _, err := tx.Exec(query, *opt.AccessStatus, chatID); err != nil {
+				logging.Errorw(ctx, "update chat access_status failed", "err", err, "chatID", chatID)
 				return "", false, err
 			}
 		}
@@ -737,14 +732,14 @@ func (s *chatStore) GetFirstMessages(ctx context.Context, opt []models.FirstMess
 	return result, nil
 }
 
-func (s *chatStore) UpdateHireContact(ctx context.Context, chatID string, contact *models.HireContact) error {
+func (s *chatStore) UpdateHireContact(ctx context.Context, chatID string, userID string, contact *models.HireContact) error {
 	query := `
-	UPDATE public.chat SET hire_contact=?
-	WHERE id=?
+	UPDATE public.chat_thread SET hire_contact=?
+	WHERE chat_id=? AND sender_id=?
 	`
 	query = s.db.Rebind(query)
-	if _, err := s.db.Exec(query, contact, chatID); err != nil {
-		logging.Errorw(ctx, "update hire contact failed", "err", err, "chatID", chatID)
+	if _, err := s.db.Exec(query, contact, chatID, userID); err != nil {
+		logging.Errorw(ctx, "update hire contact failed", "err", err, "chatID", chatID, "userID", userID)
 		return err
 	}
 

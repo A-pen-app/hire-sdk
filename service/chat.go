@@ -493,14 +493,33 @@ func (s *chatService) GetBusinessCardOnly(ctx context.Context, bundleID string, 
 		hasResumeMap[rel.ChatID] = struct{}{}
 	}
 
-	var result []*models.BusinessCardChat
+	var filtered []*models.BusinessCardChat
 	for _, c := range bcChats {
 		if _, ok := hasResumeMap[c.ChatID]; !ok {
-			result = append(result, c)
+			filtered = append(filtered, c)
 		}
 	}
 
-	return result, nil
+	if len(filtered) == 0 {
+		return nil, nil
+	}
+
+	// Populate UserID (job seeker) from business card
+	snapshotIDs := make([]string, len(filtered))
+	for i, c := range filtered {
+		snapshotIDs[i] = c.SnapshotID
+	}
+
+	userIDMap, err := s.bc.GetSnapshotOwners(ctx, snapshotIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, c := range filtered {
+		c.UserID = userIDMap[c.SnapshotID]
+	}
+
+	return filtered, nil
 }
 
 func toResumeStatus(status models.AccessStatus) models.ResumeStatus {

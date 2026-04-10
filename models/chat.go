@@ -376,9 +376,9 @@ func ReplyTo(replyToMessageID string) SendOptionFunc {
 
 type BusinessCardChat struct {
 	ChatID     string `db:"chat_id"`
-	SenderID   string `db:"sender_id"`
-	ReceiverID string `db:"receiver_id"`
 	PostID     string `db:"post_id"`
+	SnapshotID string `db:"snapshot_id"`
+	UserID     string `db:"-"` // job seeker, populated by service layer
 }
 
 type BusinessCardChatInfo struct {

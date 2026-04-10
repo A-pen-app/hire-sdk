@@ -162,3 +162,34 @@ func (s *businessCard) ListSnapshots(ctx context.Context, snapshotIDs []string) 
 	}
 	return snapshots, nil
 }
+
+func (s *businessCard) GetSnapshotOwners(ctx context.Context, snapshotIDs []string) (map[string]string, error) {
+	if len(snapshotIDs) == 0 {
+		return map[string]string{}, nil
+	}
+
+	type row struct {
+		SnapshotID string `db:"snapshot_id"`
+		UserID     string `db:"user_id"`
+	}
+
+	query := `
+	SELECT bcs.id AS snapshot_id, bc.user_id
+	FROM public.business_card_snapshot bcs
+	JOIN public.business_card bc ON bcs.business_card_id = bc.id
+	WHERE bcs.id = ANY(?)
+	`
+	query = s.db.Rebind(query)
+
+	var rows []row
+	if err := s.db.SelectContext(ctx, &rows, query, pq.Array(snapshotIDs)); err != nil {
+		logging.Errorw(ctx, "failed to get user ids by snapshot ids", "err", err, "snapshotIDs", snapshotIDs)
+		return nil, err
+	}
+
+	result := make(map[string]string, len(rows))
+	for _, r := range rows {
+		result[r.SnapshotID] = r.UserID
+	}
+	return result, nil
+}

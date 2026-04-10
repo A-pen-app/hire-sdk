@@ -774,14 +774,12 @@ func (s *chatStore) UpdateAccessStatus(ctx context.Context, chatID string, statu
 
 func (s *chatStore) GetBusinessCardChats(ctx context.Context, appID string, before time.Duration) ([]*models.BusinessCardChat, error) {
 	query := `
-	SELECT C.id AS chat_id, CT.sender_id, CT.receiver_id, C.post_id
+	SELECT C.id AS chat_id, C.post_id, C.business_card_snapshot_id AS snapshot_id
 	FROM public.chat C
-	JOIN public.chat_thread CT ON C.id = CT.chat_id
 	WHERE C.app_id = ?
 	  AND C.business_card_snapshot_id IS NOT NULL
 	  AND C.post_id IS NOT NULL
 	  AND C.created_at < ?
-	  AND CT.sender_id != CT.receiver_id
 	`
 	query = s.db.Rebind(query)
 

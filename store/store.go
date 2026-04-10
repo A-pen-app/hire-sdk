@@ -51,6 +51,7 @@ type BusinessCard interface {
 	CreateSnapshot(ctx context.Context, appID, userID string, card *models.BusinessCardContent) (*models.BusinessCardSnapshot, error)
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.BusinessCardSnapshot, error)
 	ListSnapshots(ctx context.Context, snapshotIDs []string) ([]*models.BusinessCardSnapshot, error)
+	GetSnapshotOwners(ctx context.Context, snapshotIDs []string) (map[string]string, error)
 }
 
 type App interface {

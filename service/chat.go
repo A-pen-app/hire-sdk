@@ -154,10 +154,30 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 	}
 
 	if chat.PostID != nil {
-		// AccessStatus: 求職方永遠 UNLOCKED，徵才方看 subscription + DB 值
-		if userID == chat.SenderID {
+		// Resume relation (used for both resume snapshot and job seeker detection)
+		relation, err := s.r.GetRelation(ctx, models.ByChat(chatID))
+		if err != nil && err != sql.ErrNoRows {
+			logging.Errorw(ctx, "failed to get resume relation", "err", err, "chatID", chatID)
+			return nil, err
+		}
+
+		// Determine job seeker: prefer resume relation, fall back to business card owner
+		jobSeekerID := ""
+		if relation != nil {
+			jobSeekerID = relation.UserID
+		} else if chat.BusinessCardSnapshotID != nil {
+			ownerMap, err := s.bc.GetSnapshotOwners(ctx, []string{*chat.BusinessCardSnapshotID})
+			if err != nil {
+				logging.Errorw(ctx, "failed to get business card snapshot owner", "err", err, "snapshotID", *chat.BusinessCardSnapshotID)
+				return nil, err
+			}
+			jobSeekerID = ownerMap[*chat.BusinessCardSnapshotID]
+		}
+
+		// AccessStatus: 求職方永遠 UNLOCKED，徵才方先看 DB 值、再看 subscription
+		if userID == jobSeekerID {
 			chat.AccessStatus = models.AccessStatusUnlocked
-		} else {
+		} else if chat.AccessStatus != models.AccessStatusUnlocked {
 			subscription, err := s.s.Get(ctx, app.ID, userID)
 			if err != nil && err != sql.ErrNoRows {
 				logging.Errorw(ctx, "failed to get subscription", "err", err, "appID", app.ID, "userID", userID)
@@ -168,13 +188,7 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 			}
 		}
 
-		// Resume
-		relation, err := s.r.GetRelation(ctx, models.ByChat(chatID))
-		if err != nil && err != sql.ErrNoRows {
-			logging.Errorw(ctx, "failed to get resume relation", "err", err, "chatID", chatID)
-			return nil, err
-		}
-
+		// Resume snapshot
 		if relation != nil {
 			snapshot, err := s.r.GetSnapshot(ctx, relation.SnapshotID)
 			if err != nil {
@@ -250,6 +264,25 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 		}
 	}
 
+	// Batch fetch business card snapshot owners (fallback for job seeker detection when no resume relation)
+	bcOwnerMap := map[string]string{}
+	var bcSnapshotIDs []string
+	for _, chat := range chats {
+		if chat.PostID != nil && chat.BusinessCardSnapshotID != nil {
+			if _, ok := resumeRelationMap[chat.ChatID]; !ok {
+				bcSnapshotIDs = append(bcSnapshotIDs, *chat.BusinessCardSnapshotID)
+			}
+		}
+	}
+	if len(bcSnapshotIDs) > 0 {
+		owners, err := s.bc.GetSnapshotOwners(ctx, bcSnapshotIDs)
+		if err != nil {
+			logging.Errorw(ctx, "failed to get business card snapshot owners", "err", err)
+		} else {
+			bcOwnerMap = owners
+		}
+	}
+
 	// Subscription: query once
 	var subscription *models.UserSubscription
 	if len(hireChatIDs) > 0 {
@@ -274,9 +307,17 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 		}
 
 		if chats[i].PostID != nil {
-			if userID == chats[i].SenderID {
+			// Determine job seeker: prefer resume relation, fall back to business card owner
+			jobSeekerID := ""
+			if rel, ok := resumeRelationMap[chats[i].ChatID]; ok {
+				jobSeekerID = rel.UserID
+			} else if chats[i].BusinessCardSnapshotID != nil {
+				jobSeekerID = bcOwnerMap[*chats[i].BusinessCardSnapshotID]
+			}
+
+			if userID == jobSeekerID {
 				chats[i].AccessStatus = models.AccessStatusUnlocked
-			} else if isSubscribed {
+			} else if chats[i].AccessStatus != models.AccessStatusUnlocked && isSubscribed {
 				chats[i].AccessStatus = models.AccessStatusUnlocked
 			}
 

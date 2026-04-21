@@ -73,6 +73,15 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 			return "", models.ErrorWrongParams
 		}
 
+		relation, err := s.r.GetRelation(ctx, models.ByChat(chatID))
+		if err != nil && err != sql.ErrNoRows {
+			logging.Errorw(ctx, "failed to get resume relation", "err", err, "chatID", chatID)
+			return "", err
+		}
+		if relation != nil {
+			return chatID, models.ErrorNotAllowed
+		}
+
 		// Update the user's resume
 		if err := s.r.Update(ctx, app.ID, senderID, opt.Resume); err != nil {
 			logging.Errorw(ctx, "failed to update resume", "err", err, "appID", app.ID, "senderID", senderID)
@@ -105,6 +114,15 @@ func (s *chatService) New(ctx context.Context, bundleID, senderID, receiverID st
 	}
 
 	if opt.Card != nil {
+		infos, err := s.c.GetBusinessCardChatInfos(ctx, []string{chatID})
+		if err != nil {
+			logging.Errorw(ctx, "failed to get business card chat infos", "err", err, "chatID", chatID)
+			return "", err
+		}
+		if _, ok := infos[chatID]; ok {
+			return chatID, models.ErrorNotAllowed
+		}
+
 		// Create a business card bcSnapshot
 		bcSnapshot, err := s.bc.CreateSnapshot(ctx, app.ID, senderID, opt.Card)
 		if err != nil {

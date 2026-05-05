@@ -77,9 +77,11 @@ func (s *businessCardService) Update(ctx context.Context, bundleID, userID strin
 	// If no resume exists, seed one from the card data
 	if _, err := s.r.Get(ctx, app.ID, userID); err == sql.ErrNoRows {
 		content := &models.ResumeContent{
-			RealName:    card.RealName,
-			Position:    card.Position,
-			Departments: card.Departments,
+			RealName:            card.RealName,
+			Position:            card.Position,
+			Departments:         card.Departments,
+			CurrentOrganization: card.CurrentOrganization,
+			CurrentJobTitle:     card.CurrentJobTitle,
 		}
 		if _, err := s.r.Create(ctx, app.ID, userID, content); err != nil {
 			logging.Errorw(ctx, "failed to seed resume from card", "err", err, "userID", userID)

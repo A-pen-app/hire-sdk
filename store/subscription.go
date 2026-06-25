@@ -48,25 +48,19 @@ func (ss *subscriptionStore) Get(ctx context.Context, appID, userID string) (*mo
 func (ss *subscriptionStore) List(ctx context.Context, appID string, userIDs []string) ([]*models.UserSubscription, error) {
 	subscriptions := []*models.UserSubscription{}
 
-	// Handle empty userIDs slice
-	if len(userIDs) == 0 {
-		return subscriptions, nil
+	query := `
+	SELECT app_id, user_id, status, expires_at, created_at, updated_at
+	FROM public.user_subscription
+	WHERE app_id = ?`
+	args := []interface{}{appID}
+
+	if len(userIDs) > 0 {
+		query += ` AND user_id = ANY(?)`
+		args = append(args, pq.Array(userIDs))
 	}
 
-	query := `
-	SELECT 
-		app_id,
-		user_id,	
-		status,
-		expires_at,
-		created_at,
-		updated_at
-	FROM public.user_subscription 
-	WHERE app_id = ? AND user_id = ANY(?)
-	`
-
 	query = ss.db.Rebind(query)
-	err := ss.db.Select(&subscriptions, query, appID, pq.Array(userIDs))
+	err := ss.db.Select(&subscriptions, query, args...)
 	if err != nil {
 		logging.Errorw(ctx, "get user subscriptions failed", "err", err, "app_id", appID, "user_ids", userIDs)
 		return nil, err

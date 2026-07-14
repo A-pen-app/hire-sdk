@@ -19,6 +19,21 @@ type BusinessCardContent struct {
 	// for pharmacist and nurse
 	CurrentOrganization *string `json:"current_organization,omitempty"`
 	CurrentJobTitle     *string `json:"current_job_title,omitempty"`
+
+	// ExperienceYears is apen-only, mirroring user.experience_years in apen's
+	// main DB with its sentinel encoding: 0 = less than 1 year (also
+	// no-experience and students), 21 = more than 20 years. Never render the
+	// raw value — decode via FormatExperienceYears.
+	ExperienceYears *int `json:"experience_years,omitempty"`
+
+	// ExperienceRange is the nurse / phar range-based tenure; mutually
+	// exclusive with ExperienceYears.
+	ExperienceRange *ExperienceRange `json:"experience_range,omitempty"`
+
+	// PreferredLocations is dual-written with the resume's preferred_locations:
+	// updating either surface syncs the other in one transaction (see
+	// store.BusinessCard.Upsert and store.Resume.Update).
+	PreferredLocations []string `json:"preferred_locations,omitempty"`
 }
 
 // Value implements the driver.Valuer interface for inserting as jsonb

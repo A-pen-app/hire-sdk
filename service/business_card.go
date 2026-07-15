@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/A-pen-app/hire-sdk/models"
 	"github.com/A-pen-app/hire-sdk/store"
@@ -66,6 +67,9 @@ func (s *businessCardService) Get(ctx context.Context, bundleID, userID string) 
 // store.BusinessCard.Upsert); if no resume exists, one is seeded from the
 // card data.
 func (s *businessCardService) Update(ctx context.Context, bundleID, userID string, card *models.BusinessCardContent) (*models.BusinessCardContent, error) {
+	if card == nil {
+		return nil, errors.New("business card content is nil")
+	}
 	app, err := s.a.GetByBundleID(ctx, bundleID)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)

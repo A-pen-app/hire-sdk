@@ -158,7 +158,7 @@ func (s *resumeStore) Update(ctx context.Context, appID, userID string, content 
 		// back to the resume anyway).
 		query := `
 		UPDATE public.business_card
-		SET content = jsonb_set(content, '{preferred_locations}', ?::jsonb),
+		SET content = jsonb_set(COALESCE(content, '{}'::jsonb), '{preferred_locations}', ?::jsonb),
 			updated_at = ?
 		WHERE app_id = ? AND user_id = ?
 		`

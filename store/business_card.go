@@ -89,7 +89,7 @@ func (s *businessCard) Upsert(ctx context.Context, appID, userID string, card *m
 		// No-op when the user has no resume yet; the service layer seeds one.
 		query := `
 		UPDATE public.resume
-		SET content = jsonb_set(content, '{preferred_locations}', ?::jsonb),
+		SET content = jsonb_set(COALESCE(content, '{}'::jsonb), '{preferred_locations}', ?::jsonb),
 			updated_at = ?
 		WHERE app_id = ? AND user_id = ?
 		`

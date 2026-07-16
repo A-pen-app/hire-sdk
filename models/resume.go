@@ -44,51 +44,61 @@ type HospitalExperience struct {
 	YearOfExperience YearOfExperienceType `json:"year_of_experience"`
 }
 
+// YearOfExperienceType is the legacy 12-step tenure ordinal used by the
+// resume's HospitalExperience (and apen's social_business_card rows).
+//
+// The iota order below must NEVER change: existing DB rows store these
+// ordinals, so reordering silently shifts every stored tenure.
 type YearOfExperienceType int
 
 const (
-	yearOfExperienceType_None YearOfExperienceType = iota
-	yearOfExperienceType_LessThanOne
-	yearOfExperienceType_OneToTwo
-	yearOfExperienceType_TwoToThree
-	yearOfExperienceType_ThreeToFour
-	yearOfExperienceType_FourToFive
-	yearOfExperienceType_FiveToSix
-	yearOfExperienceType_SixToSeven
-	yearOfExperienceType_SevenToEight
-	yearOfExperienceType_EightToNine
-	yearOfExperienceType_NineToTen
-	yearOfExperienceType_MoreThanTen
+	YearOfExperienceNone YearOfExperienceType = iota
+	YearOfExperienceLessThanOne
+	YearOfExperienceOneToTwo
+	YearOfExperienceTwoToThree
+	YearOfExperienceThreeToFour
+	YearOfExperienceFourToFive
+	YearOfExperienceFiveToSix
+	YearOfExperienceSixToSeven
+	YearOfExperienceSevenToEight
+	YearOfExperienceEightToNine
+	YearOfExperienceNineToTen
+	YearOfExperienceMoreThanTen
 )
 
 func (y YearOfExperienceType) Chinese() string {
 	switch y {
-	case yearOfExperienceType_None:
+	case YearOfExperienceNone:
 		return "無經驗"
-	case yearOfExperienceType_LessThanOne:
+	case YearOfExperienceLessThanOne:
 		return "1年以下"
-	case yearOfExperienceType_OneToTwo:
+	case YearOfExperienceOneToTwo:
 		return "1年 ~ 2年"
-	case yearOfExperienceType_TwoToThree:
+	case YearOfExperienceTwoToThree:
 		return "2年 ~ 3年"
-	case yearOfExperienceType_ThreeToFour:
+	case YearOfExperienceThreeToFour:
 		return "3年 ~ 4年"
-	case yearOfExperienceType_FourToFive:
+	case YearOfExperienceFourToFive:
 		return "4年 ~ 5年"
-	case yearOfExperienceType_FiveToSix:
+	case YearOfExperienceFiveToSix:
 		return "5年 ~ 6年"
-	case yearOfExperienceType_SixToSeven:
+	case YearOfExperienceSixToSeven:
 		return "6年 ~ 7年"
-	case yearOfExperienceType_SevenToEight:
+	case YearOfExperienceSevenToEight:
 		return "7年 ~ 8年"
-	case yearOfExperienceType_EightToNine:
+	case YearOfExperienceEightToNine:
 		return "8年 ~ 9年"
-	case yearOfExperienceType_NineToTen:
+	case YearOfExperienceNineToTen:
 		return "9年 ~ 10年"
-	case yearOfExperienceType_MoreThanTen:
+	case YearOfExperienceMoreThanTen:
 		return "10年以上"
 	}
 	return ""
+}
+
+// ValidateYearOfExperience reports whether y is one of the defined ordinals.
+func ValidateYearOfExperience(y YearOfExperienceType) bool {
+	return y >= YearOfExperienceNone && y <= YearOfExperienceMoreThanTen
 }
 
 type ContactTime struct {

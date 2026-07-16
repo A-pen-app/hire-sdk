@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/A-pen-app/hire-sdk/models"
@@ -49,8 +50,20 @@ func (s *businessCard) Get(ctx context.Context, appID, userID string) (*models.B
 	return &record, nil
 }
 
+// Upsert writes the user's business card. PreferredLocations is dual-written:
+// when the card carries a non-nil value, the user's resume (if any) gets its
+// preferred_locations replaced in the same transaction so the two surfaces
+// stay in sync. A nil value leaves the resume untouched, so callers unaware
+// of locations can't wipe them.
 func (s *businessCard) Upsert(ctx context.Context, appID, userID string, card *models.BusinessCardContent) error {
 	now := time.Now()
+
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		logging.Errorw(ctx, "failed to begin business card upsert tx", "err", err, "appID", appID, "userID", userID)
+		return err
+	}
+	defer tx.Rollback()
 
 	query := `
 	INSERT INTO public.business_card (id, app_id, user_id, content, created_at, updated_at)
@@ -59,14 +72,38 @@ func (s *businessCard) Upsert(ctx context.Context, appID, userID string, card *m
 		content = EXCLUDED.content,
 		updated_at = EXCLUDED.updated_at
 	`
-	query = s.db.Rebind(query)
+	query = tx.Rebind(query)
 
 	id := uuid.New().String()
-	if _, err := s.db.ExecContext(ctx, query, id, appID, userID, card, now, now); err != nil {
+	if _, err := tx.ExecContext(ctx, query, id, appID, userID, card, now, now); err != nil {
 		logging.Errorw(ctx, "failed to upsert business card", "err", err, "appID", appID, "userID", userID)
 		return err
 	}
 
+	if card != nil && card.PreferredLocations != nil {
+		locations, err := json.Marshal(card.PreferredLocations)
+		if err != nil {
+			logging.Errorw(ctx, "failed to marshal preferred locations", "err", err, "appID", appID, "userID", userID)
+			return err
+		}
+		// No-op when the user has no resume yet; the service layer seeds one.
+		query := `
+		UPDATE public.resume
+		SET content = jsonb_set(COALESCE(content, '{}'::jsonb), '{preferred_locations}', ?::jsonb),
+			updated_at = ?
+		WHERE app_id = ? AND user_id = ?
+		`
+		query = tx.Rebind(query)
+		if _, err := tx.ExecContext(ctx, query, string(locations), now, appID, userID); err != nil {
+			logging.Errorw(ctx, "failed to sync preferred locations to resume", "err", err, "appID", appID, "userID", userID)
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		logging.Errorw(ctx, "failed to commit business card upsert tx", "err", err, "appID", appID, "userID", userID)
+		return err
+	}
 	return nil
 }
 

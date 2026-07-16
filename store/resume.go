@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -119,21 +120,66 @@ func (s *resumeStore) GetUserAppliedPostIDs(ctx context.Context, appID, userID s
 	return postIDs, nil
 }
 
+// Update replaces the resume content. PreferredLocations is dual-written:
+// the user's business card (if any) gets its preferred_locations replaced in
+// the same transaction so the two surfaces stay in sync. The resume is a
+// full-replace surface, so the card mirrors whatever the resume now holds —
+// including null when the locations were cleared.
 func (s *resumeStore) Update(ctx context.Context, appID, userID string, content *models.ResumeContent) error {
+	now := time.Now()
+
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		logging.Errorw(ctx, "failed to begin resume update tx", "err", err, "appID", appID, "userID", userID)
+		return err
+	}
+	defer tx.Rollback()
+
+	// Mirror preferred_locations to the business card BEFORE updating the
+	// resume, so this path takes row locks in business_card → resume order —
+	// the same order as BusinessCard.Upsert. Doing the resume UPDATE first
+	// would give the two dual-write paths opposite lock orders, and since the
+	// locks are held until COMMIT inside the tx, concurrent writes for the same
+	// user could AB-BA deadlock (SQLSTATE 40P01). The two statements are order-
+	// independent for the result: the mirror doesn't depend on the resume write.
+	if content != nil {
+		locations, err := json.Marshal(content.PreferredLocations)
+		if err != nil {
+			logging.Errorw(ctx, "failed to marshal preferred locations", "err", err, "appID", appID, "userID", userID)
+			return err
+		}
+		// No-op when the user has no business card yet (the card view falls
+		// back to the resume anyway).
+		query := `
+		UPDATE public.business_card
+		SET content = jsonb_set(COALESCE(content, '{}'::jsonb), '{preferred_locations}', ?::jsonb),
+			updated_at = ?
+		WHERE app_id = ? AND user_id = ?
+		`
+		query = tx.Rebind(query)
+		if _, err := tx.ExecContext(ctx, query, string(locations), now, appID, userID); err != nil {
+			logging.Errorw(ctx, "failed to sync preferred locations to business card", "err", err, "appID", appID, "userID", userID)
+			return err
+		}
+	}
+
 	query := `
-	UPDATE public.resume 
+	UPDATE public.resume
 	SET	content = ?,
 		updated_at = ?
 	WHERE app_id = ? AND user_id = ?
 	`
-	query = s.db.Rebind(query)
+	query = tx.Rebind(query)
 
-	_, err := s.db.Exec(query, content, time.Now(), appID, userID)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, query, content, now, appID, userID); err != nil {
 		logging.Errorw(ctx, "failed to update resume", "err", err, "appID", appID, "userID", userID)
 		return err
 	}
 
+	if err := tx.Commit(); err != nil {
+		logging.Errorw(ctx, "failed to commit resume update tx", "err", err, "appID", appID, "userID", userID)
+		return err
+	}
 	return nil
 }
 

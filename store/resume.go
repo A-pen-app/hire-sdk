@@ -135,19 +135,13 @@ func (s *resumeStore) Update(ctx context.Context, appID, userID string, content 
 	}
 	defer tx.Rollback()
 
-	query := `
-	UPDATE public.resume
-	SET	content = ?,
-		updated_at = ?
-	WHERE app_id = ? AND user_id = ?
-	`
-	query = tx.Rebind(query)
-
-	if _, err := tx.ExecContext(ctx, query, content, now, appID, userID); err != nil {
-		logging.Errorw(ctx, "failed to update resume", "err", err, "appID", appID, "userID", userID)
-		return err
-	}
-
+	// Mirror preferred_locations to the business card BEFORE updating the
+	// resume, so this path takes row locks in business_card → resume order —
+	// the same order as BusinessCard.Upsert. Doing the resume UPDATE first
+	// would give the two dual-write paths opposite lock orders, and since the
+	// locks are held until COMMIT inside the tx, concurrent writes for the same
+	// user could AB-BA deadlock (SQLSTATE 40P01). The two statements are order-
+	// independent for the result: the mirror doesn't depend on the resume write.
 	if content != nil {
 		locations, err := json.Marshal(content.PreferredLocations)
 		if err != nil {
@@ -167,6 +161,19 @@ func (s *resumeStore) Update(ctx context.Context, appID, userID string, content 
 			logging.Errorw(ctx, "failed to sync preferred locations to business card", "err", err, "appID", appID, "userID", userID)
 			return err
 		}
+	}
+
+	query := `
+	UPDATE public.resume
+	SET	content = ?,
+		updated_at = ?
+	WHERE app_id = ? AND user_id = ?
+	`
+	query = tx.Rebind(query)
+
+	if _, err := tx.ExecContext(ctx, query, content, now, appID, userID); err != nil {
+		logging.Errorw(ctx, "failed to update resume", "err", err, "appID", appID, "userID", userID)
+		return err
 	}
 
 	if err := tx.Commit(); err != nil {

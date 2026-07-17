@@ -21,6 +21,7 @@ type Resume interface {
 	Read(ctx context.Context, snapshotID string) error
 	UpdateRelationStatus(ctx context.Context, snapshotID string, status models.ResumeStatus) error
 	UpdateRelationListStatus(ctx context.Context, postIDs []string, status models.ResumeStatus) error
+	CountByPostIDs(ctx context.Context, postIDs []string) (map[string]int, error)
 }
 
 type Chat interface {

@@ -120,6 +120,40 @@ func (s *resumeStore) GetUserAppliedPostIDs(ctx context.Context, appID, userID s
 	return postIDs, nil
 }
 
+// CountByPostIDs returns the number of applicants per post, keyed by post ID.
+// Posts with no applicant are absent from the map. Counting distinct users keeps
+// re-submissions from inflating the number.
+func (s *resumeStore) CountByPostIDs(ctx context.Context, postIDs []string) (map[string]int, error) {
+	counts := map[string]int{}
+	if len(postIDs) == 0 {
+		return counts, nil
+	}
+
+	query := `
+	SELECT
+		post_id,
+		COUNT(DISTINCT user_id) AS count
+	FROM public.resume_relation
+	WHERE post_id = ANY(?)
+	GROUP BY post_id
+	`
+	query = s.db.Rebind(query)
+
+	rows := []struct {
+		PostID string `db:"post_id"`
+		Count  int    `db:"count"`
+	}{}
+	if err := s.db.SelectContext(ctx, &rows, query, pq.Array(postIDs)); err != nil {
+		logging.Errorw(ctx, "failed to count resume relations by post ids", "err", err, "postIDs", postIDs)
+		return nil, err
+	}
+
+	for _, r := range rows {
+		counts[r.PostID] = r.Count
+	}
+	return counts, nil
+}
+
 // Update replaces the resume content. PreferredLocations is dual-written:
 // the user's business card (if any) gets its preferred_locations replaced in
 // the same transaction so the two surfaces stay in sync. The resume is a

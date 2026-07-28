@@ -218,13 +218,24 @@ func TestArchiveMarksTheRoomAsRead(t *testing.T) {
 	svc, c := setupRoom(t, 0)
 	ctx := context.Background()
 
+	// Both sides accumulate unread, so the one-sided assertion below actually has
+	// something to detect: without B's non-zero count, "B is untouched" would pass
+	// even if Archive zeroed both rows.
 	for i := 0; i < 3; i++ {
 		if _, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("m"), nil, nil, nil); err != nil {
 			t.Fatalf("AddMessage: %v", err)
 		}
 	}
+	for i := 0; i < 2; i++ {
+		if _, err := c.AddMessage(ctx, userA, room, userB, models.MsgText, textPtr("m"), nil, nil, nil); err != nil {
+			t.Fatalf("AddMessage: %v", err)
+		}
+	}
 	if got := unreadOf(t, c, userA); got != 3 {
 		t.Fatalf("precondition: A has %d unread, want 3", got)
+	}
+	if got := unreadOf(t, c, userB); got != 2 {
+		t.Fatalf("precondition: B has %d unread, want 2", got)
 	}
 
 	if err := svc.Archive(ctx, testBundleID, userA, room, true); err != nil {
@@ -234,8 +245,8 @@ func TestArchiveMarksTheRoomAsRead(t *testing.T) {
 	if got := unreadOf(t, c, userA); got != 0 {
 		t.Errorf("A has %d unread after archiving, want 0", got)
 	}
-	if got := unreadOf(t, c, userB); got != 0 {
-		t.Errorf("B has %d unread, want 0 — A archiving must not touch B", got)
+	if got := unreadOf(t, c, userB); got != 2 {
+		t.Errorf("B has %d unread, want 2 — A archiving must not touch B", got)
 	}
 }
 
@@ -605,4 +616,3 @@ func TestPerMessageDeleteStacksWithTheRoomCutoff(t *testing.T) {
 // there through PATCH /chats/:chat_id/mark. In hire-sdk, Annotate is not on the
 // service interface and has no route (gap G2 in docs/chat_visibility.md), so there is
 // nothing to assert here.
-

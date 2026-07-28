@@ -58,28 +58,33 @@ func IsMessageDeletedFor(status MessageStatus, senderID, viewerID string) bool {
 }
 
 // IsMessageVisibleFor reports whether a message should appear in the viewer's message
-// list — rule R2.
+// list — rule R2. Only the room-level delete cutoff removes a row.
 //
-// Unsent messages count as visible: the list still renders a "message unsent"
-// placeholder, so the caller wipes their content rather than dropping the row. Use
-// IsLastMessageVisibleFor for the chat-list preview, which drops them instead.
-func IsMessageVisibleFor(msg *Message, viewerID string, clearedAt *time.Time) bool {
+// A message the viewer deleted through the per-message flow stays in the list and
+// renders as an "unsent" placeholder — R4 forbids dropping the row, because the
+// clients count the rows in a page to decide whether older history exists
+// (apen-api#180). Callers mark those rows via IsMessageDeletedFor; see
+// aggregateMessages in service/chat.go. Unsent messages stay visible for the same
+// reason. Use IsLastMessageVisibleFor for the chat-list preview, which drops both.
+func IsMessageVisibleFor(msg *Message, clearedAt *time.Time) bool {
 	if msg == nil {
 		return false
 	}
-	if !IsAfterCutoff(msg.CreatedAt, clearedAt) {
-		return false
-	}
-	return !IsMessageDeletedFor(msg.Status, msg.SenderID, viewerID)
+	return IsAfterCutoff(msg.CreatedAt, clearedAt)
 }
 
 // IsLastMessageVisibleFor reports whether a message may be used as the viewer's
 // chat-list preview.
 //
-// This is IsMessageVisibleFor plus "unsent messages have nothing to preview", matching
-// the behaviour the service layer already had before these rules were extracted.
+// The preview is stricter than the message list: a row the viewer deleted and an
+// unsent row both stay in the list as placeholders (R4), but neither has anything to
+// preview, so both are skipped here — matching the behaviour the service layer
+// already had before these rules were extracted.
 func IsLastMessageVisibleFor(msg *Message, viewerID string, clearedAt *time.Time) bool {
-	if !IsMessageVisibleFor(msg, viewerID, clearedAt) {
+	if !IsMessageVisibleFor(msg, clearedAt) {
+		return false
+	}
+	if IsMessageDeletedFor(msg.Status, msg.SenderID, viewerID) {
 		return false
 	}
 	return !msg.Status.HasOneOf(Unsent)

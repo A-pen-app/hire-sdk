@@ -108,30 +108,31 @@ func TestIsMessageVisibleFor(t *testing.T) {
 	cases := []struct {
 		name      string
 		msg       *Message
-		viewerID  string
 		clearedAt *time.Time
 		want      bool
 	}{
-		{"nil message", nil, receiver, nil, false},
-		{"normal message, no cutoff", msg(Normal, tBase), receiver, nil, true},
+		{"nil message", nil, nil, false},
+		{"normal message, no cutoff", msg(Normal, tBase), nil, true},
 
-		{"before the cutoff", msg(Normal, tEarly), receiver, ptr(tBase), false},
-		{"after the cutoff", msg(Normal, tLate), receiver, ptr(tBase), true},
-		{"exactly at the cutoff", msg(Normal, tBase), receiver, ptr(tBase), false},
+		{"before the cutoff", msg(Normal, tEarly), ptr(tBase), false},
+		{"after the cutoff", msg(Normal, tLate), ptr(tBase), true},
+		{"exactly at the cutoff", msg(Normal, tBase), ptr(tBase), false},
 
-		{"deleted for this viewer", msg(DeletedByReceiver, tLate), receiver, ptr(tBase), false},
-		{"deleted for the other side only", msg(DeletedBySender, tLate), receiver, ptr(tBase), true},
+		// CHAT-311 / R4: a message the viewer deleted keeps its row and renders as an
+		// "unsent" placeholder — only the room-level cutoff removes rows.
+		{"deleted for this viewer stays visible", msg(DeletedByReceiver, tLate), ptr(tBase), true},
+		{"deleted for the other side only", msg(DeletedBySender, tLate), ptr(tBase), true},
 
-		// CHAT-303: the per-message delete and the room-level cutoff stack. Either one
-		// alone is enough to hide a message.
-		{"deleted for this viewer and before the cutoff", msg(DeletedByReceiver, tEarly), receiver, ptr(tBase), false},
+		// CHAT-303: the room-level cutoff still hides a deleted message's row — the
+		// cutoff is the one mechanism that removes rows.
+		{"deleted for this viewer and before the cutoff", msg(DeletedByReceiver, tEarly), ptr(tBase), false},
 
 		// Unsent rows stay in the list so the placeholder can be rendered.
-		{"unsent stays visible in the message list", msg(Unsent, tLate), receiver, ptr(tBase), true},
+		{"unsent stays visible in the message list", msg(Unsent, tLate), ptr(tBase), true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := IsMessageVisibleFor(c.msg, c.viewerID, c.clearedAt); got != c.want {
+			if got := IsMessageVisibleFor(c.msg, c.clearedAt); got != c.want {
 				t.Errorf("IsMessageVisibleFor() = %v, want %v", got, c.want)
 			}
 		})
@@ -152,8 +153,9 @@ func TestIsLastMessageVisibleFor(t *testing.T) {
 		want      bool
 	}{
 		{"normal message", msg(Normal, tLate), ptr(tBase), true},
-		// The only difference from IsMessageVisibleFor: an unsent message has nothing
-		// to preview, so the chat list falls back to the next candidate.
+		// Stricter than IsMessageVisibleFor: unsent and viewer-deleted rows render as
+		// placeholders in the message list (R4) but have nothing to preview, so the
+		// chat list falls back to the next candidate.
 		{"unsent has no preview", msg(Unsent, tLate), ptr(tBase), false},
 		{"before the cutoff", msg(Normal, tEarly), ptr(tBase), false},
 		{"deleted for this viewer", msg(DeletedByReceiver, tLate), ptr(tBase), false},

@@ -28,6 +28,11 @@ type Chat interface {
 	// history intact. Archiving also marks the room read. See docs/chat_visibility.md.
 	Archive(ctx context.Context, bundleID, userID, chatID string, archived bool) error
 
+	// Clear deletes a chat room for this user: every message up to now stops being
+	// visible to them and the room leaves their list. One-sided and not recoverable.
+	// Messages sent after the cutoff arrive and display normally.
+	Clear(ctx context.Context, bundleID, userID, chatID string) error
+
 	GetBusinessCardOnly(ctx context.Context, bundleID string, before time.Duration) ([]*models.BusinessCardChat, error)
 }
 

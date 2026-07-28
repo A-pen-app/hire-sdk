@@ -163,7 +163,7 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 	chat.HireStatus = &hireStatus
 
 	if msgID := chat.LastMessageID; msgID != nil {
-		msg, err := s.aggregateLastMessage(ctx, userID, *msgID, false)
+		msg, err := s.aggregateLastMessage(ctx, userID, *msgID, chat.ClearedAt, false)
 		if err != nil {
 			logging.Errorw(ctx, "aggregate last message failed", "err", err, "msgID", *msgID)
 		} else {
@@ -316,7 +316,7 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 		chats[i].HireStatus = &hireStatus
 
 		if msgID := chats[i].LastMessageID; msgID != nil {
-			msg, err := s.aggregateLastMessage(ctx, userID, *msgID, true)
+			msg, err := s.aggregateLastMessage(ctx, userID, *msgID, chats[i].ClearedAt, true)
 			if err != nil {
 				logging.Errorw(ctx, "aggregate last message failed", "err", err, "msgID", *msgID)
 			} else {
@@ -384,8 +384,10 @@ func (s *chatService) FetchNewMessages(ctx context.Context, bundleID, userID, ch
 		return nil, err
 	}
 
-	// check ownership
-	if _, err := s.c.Get(ctx, app.ID, chatID, userID); err != nil {
+	// check ownership. The row we get back also carries this user's delete cutoff, so
+	// applying rule R2 costs no extra query.
+	chat, err := s.c.Get(ctx, app.ID, chatID, userID)
+	if err != nil {
 		logging.Errorw(ctx, "failed to verify chat ownership", "err", err, "appID", app.ID, "chatID", chatID, "userID", userID)
 		return nil, err
 	}
@@ -397,7 +399,7 @@ func (s *chatService) FetchNewMessages(ctx context.Context, bundleID, userID, ch
 		return nil, models.ErrorNotAllowed
 	}
 
-	nonFilteredMsgs, err := s.c.GetNewMessages(ctx, chatID, lastMsg.CreatedAt)
+	nonFilteredMsgs, err := s.c.GetNewMessages(ctx, chatID, lastMsg.CreatedAt, chat.ClearedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -413,8 +415,10 @@ func (s *chatService) GetChatMessages(ctx context.Context, bundleID, userID, cha
 		return nil, "", err
 	}
 
-	// check ownership
-	if _, err := s.c.Get(ctx, app.ID, chatID, userID); err != nil {
+	// check ownership. The row we get back also carries this user's delete cutoff, so
+	// applying rule R2 costs no extra query.
+	chat, err := s.c.Get(ctx, app.ID, chatID, userID)
+	if err != nil {
 		logging.Errorw(ctx, "failed to verify chat ownership", "err", err, "appID", app.ID, "chatID", chatID, "userID", userID)
 		return nil, "", err
 	}
@@ -423,7 +427,7 @@ func (s *chatService) GetChatMessages(ctx context.Context, bundleID, userID, cha
 	}
 
 	// get one more element for determining next cursor
-	nonFilteredMsgs, err := s.c.GetMessages(ctx, chatID, next, count+1)
+	nonFilteredMsgs, err := s.c.GetMessages(ctx, chatID, next, count+1, chat.ClearedAt)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get messages", "err", err, "chatID", chatID, "count", count+1)
 		return nil, "", err
@@ -502,6 +506,27 @@ func (s *chatService) Archive(ctx context.Context, bundleID, userID, chatID stri
 	}
 
 	return s.c.SetHidden(ctx, chatID, userID, archived)
+}
+
+// Clear deletes a chat room for this user: everything up to now stops being visible to
+// them, and the room leaves their list.
+//
+// One-sided and not recoverable. The other participant keeps the full history, and no
+// message row is touched — this only moves the caller's own cutoff. Messages sent after
+// the cutoff arrive and display normally. See docs/chat_visibility.md.
+func (s *chatService) Clear(ctx context.Context, bundleID, userID, chatID string) error {
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return err
+	}
+
+	if _, err := s.c.Get(ctx, app.ID, chatID, userID); err != nil {
+		logging.Errorw(ctx, "get chat failed", "err", err, "user_id", userID, "chat_id", chatID)
+		return err
+	}
+
+	return s.c.SetCleared(ctx, chatID, userID)
 }
 
 func (s *chatService) UnsendMessage(ctx context.Context, bundleID, userID, messageID string) error {
@@ -611,22 +636,20 @@ func toResumeStatus(status models.AccessStatus) models.ResumeStatus {
 }
 
 // aggregateLastMessage processes the last message with business logic (without user info)
-func (s *chatService) aggregateLastMessage(ctx context.Context, userID string, msgID string, isInjectContent bool) (*models.Message, error) {
+func (s *chatService) aggregateLastMessage(ctx context.Context, userID string, msgID string, clearedAt *time.Time, isInjectContent bool) (*models.Message, error) {
 	msg, err := s.c.GetMessage(ctx, msgID)
 	if err != nil {
 		logging.Errorw(ctx, "get last message failed", "err", err, "msgID", msgID)
 		return nil, err
 	}
 
-	status := msg.Status
-	switch {
-	case status.HasOneOf(models.DeletedBySender) && userID == msg.SenderID,
-		status.HasOneOf(models.DeletedByReceiver) && userID != msg.SenderID,
-		status.HasOneOf(models.Unsent):
+	// Rules R2 and R4: skip a preview this user deleted, unsent, or that falls before
+	// their delete cutoff. Returning nil leaves ChatRoom.LastMessage unset and the
+	// client falls back to its empty-preview rendering.
+	if !models.IsLastMessageVisibleFor(msg, userID, clearedAt) {
 		return nil, nil
-	default:
-		msg.Status = models.Normal
 	}
+	msg.Status = models.Normal
 
 	if isInjectContent {
 		if err := s.injectContent(ctx, userID, msg, false); err != nil {
@@ -709,12 +732,13 @@ func (s *chatService) aggregateMessages(ctx context.Context, userID string, nonF
 	msgs := []*models.Message{}
 	for i := range nonFilteredMsgs {
 		msg := nonFilteredMsgs[i]
+		// Rule R4: a message this user deleted is dropped entirely, leaving no
+		// placeholder — a placeholder would read as the other party having unsent it.
+		if models.IsMessageDeletedFor(msg.Status, msg.SenderID, userID) {
+			continue
+		}
 		status := msg.Status
 		switch {
-		case status.HasOneOf(models.DeletedBySender) && userID == msg.SenderID,
-			status.HasOneOf(models.DeletedByReceiver) && userID != msg.SenderID:
-			// user deleted this message, skip it
-			continue
 		case status.HasOneOf(models.Unsent):
 			// wipe out message content for unsent
 			msg.Body = nil

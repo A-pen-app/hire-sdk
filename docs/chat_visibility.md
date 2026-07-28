@@ -248,8 +248,9 @@ stays as it is.
 | G4 | `MessageStatus`'s `DeletedBySender` / `DeletedByReceiver` are **fully implemented on the read side** (`aggregateMessages` / `aggregateLastMessage`) but nothing in hire-sdk ever writes them | `service/chat.go:592,686` |
 
 G4 is only half good news: the read side of the per-message delete exists, but it
-renders by dropping the row, which violates R4 (scenario 9b) — it still needs the
-drop → mark-unsent change listed in the table above.
+rendered by dropping the row, which violates R4 (scenario 9b). The drop →
+mark-unsent change listed in the table above landed in the alignment stage
+(`fix/chat-alignment`); what is still missing is the writer.
 
 ### The existing per-message mechanism (leave it alone)
 

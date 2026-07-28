@@ -170,8 +170,9 @@ database. So:
 
 - DDL is applied once and takes effect for all three apps
 - `hire-sdk` tracked no DDL of its own (this repo did not even contain a `.sql` file).
-  New migrations go in `hire-sdk/migrations/`, which carries its own `README.md`
-  index. They are deliberately *not* filed under the API repos' `migrations/`
+  New migrations will live in `hire-sdk/migrations/` — the directory and its
+  `README.md` index are created by the implementation PR, not this one. They are
+  deliberately *not* filed under the API repos' `migrations/`
   directories: those cover each app's own main database, and a row there would point
   at a file that lives in a different repo
 - **There is no migration runner.** A DBA applies the DDL by hand before the code that
@@ -234,7 +235,7 @@ stays as it is.
 | store | `store/store.go:27` `Chat` interface | Add `SetHidden` / `SetCleared`; add `clearedAt` to `GetMessages` / `GetNewMessages` |
 | service | `service/service.go:18` `Chat` interface | Add `Archive` / `Unarchive` / `Clear` |
 | service | `service/chat.go` | Implement them. **Go through the service rather than following `Pin`'s store-direct precedent**, so they inherit the usual `GetByBundleID` plus `s.c.Get` membership check |
-| service | `service/chat.go:592` `aggregateLastMessage`, `:686` `aggregateMessages` | Replace the per-viewer visibility logic with the R2 pure function; `aggregateLastMessage` must return `nil` when the last message falls before the cutoff |
+| service | `service/chat.go:592` `aggregateLastMessage`, `:686` `aggregateMessages` | Apply the R2 cutoff; `aggregateLastMessage` must return `nil` when the last message falls before the cutoff. **Also the R4 behaviour change**: the deleted-bit branch in `aggregateMessages` (`:690-694`) currently `continue`s — dropping the row and triggering the paging bug R4 describes. Change it to keep the row and mark it unsent for the viewer (`apen-api/api/aggregator/chat.go:198` is the reference). The skip in `aggregateLastMessage`'s list preview is fine and stays |
 | API repos | `{apen,nurse,phar}-api/api/hire.go` | Add `hg.PATCH("chats/:chat_id/archive", ...)` and `hg.DELETE("chats/:chat_id/messages", ...)` right after `chats/:chat_id/pin`; copy the handler shape from `apen-api/api/hire.go`'s `pinChat` |
 
 ### Known gaps (worth confirming before you start)
@@ -246,8 +247,9 @@ stays as it is.
 | G3 | `models.ByStatus` errors out on `Deleted`, so a client can never list deleted rooms | `models/chat.go:308` |
 | G4 | `MessageStatus`'s `DeletedBySender` / `DeletedByReceiver` are **fully implemented on the read side** (`aggregateMessages` / `aggregateLastMessage`) but nothing in hire-sdk ever writes them | `service/chat.go:592,686` |
 
-G4 is good news: the read side of the per-message delete is already there, so half of
-scenario 9 is done.
+G4 is only half good news: the read side of the per-message delete exists, but it
+renders by dropping the row, which violates R4 (scenario 9b) — it still needs the
+drop → mark-unsent change listed in the table above.
 
 ### The existing per-message mechanism (leave it alone)
 
@@ -261,6 +263,10 @@ scenario 9 is done.
 
 This layer **stacks** with the room-level `cleared_at` (scenario 9): a message must
 clear both to be visible.
+
+"Leave it alone" means the bits and the write path — the message-history **rendering**
+of a deleted bit does change: `aggregateMessages` must stop dropping the row and mark
+it unsent instead (R4, see the table above).
 
 ---
 

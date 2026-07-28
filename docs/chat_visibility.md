@@ -160,10 +160,11 @@ The `hiring` DB separates the three apps by `chat.app_id`; there is only one phy
 database. So:
 
 - DDL is applied once and takes effect for all three apps
-- `hire-sdk` tracks no DDL of its own (this repo did not even contain a `.sql` file).
-  New migrations go in `hire-sdk/migrations/`, with a row added to
-  `apen-api/migrations/README.md` whose "Applies to" column reads **hiring DB** —
-  every existing row in that column says "main DB"
+- `hire-sdk` tracked no DDL of its own (this repo did not even contain a `.sql` file).
+  New migrations go in `hire-sdk/migrations/`, which carries its own `README.md`
+  index. They are deliberately *not* filed under the API repos' `migrations/`
+  directories: those cover each app's own main database, and a row there would point
+  at a file that lives in a different repo
 - **There is no migration runner.** A DBA applies the DDL by hand before the code that
   depends on it is deployed, so the DDL must be idempotent
 
@@ -218,7 +219,7 @@ stays as it is.
 | models | `models/chat.go:216` `ChatRoom` | Add `HiddenAt` / `ClearedAt` with `db:` tags; add the R1 / R2 pure functions |
 | models | `models/chat.go:301` `GetOption` / `GetOptionFunc` | Add filter options if needed; note `ByStatus` currently errors on `Deleted` |
 | store | `store/chat.go:139` `GetChats` | Add `(CT.hidden_at IS NULL OR C.updated_at > CT.hidden_at)` to `conditions`; **keep** the existing `CT.status != Deleted` |
-| store | `store/chat.go:26` `Get` | Single-room lookup currently filters on no hidden state at all, so a hidden room stays readable and writable — apply R1 here too (see "Known gaps") |
+| store | `store/chat.go:26` `Get` | Add the two columns to the SELECT list. Do **not** add a `hidden_at` filter: archiving only removes a room from the list, and opening it by direct link or from a notification has to keep working and keep showing every message (CHAT-102) |
 | store | `store/chat.go:598` `GetMessages`, `:544` `GetNewMessages` | Take a `clearedAt` argument, add `AND created_at > ?` |
 | store | `store/chat.go` (new) | `SetHidden` / `SetCleared`, shaped exactly like `Pin` (`store/chat.go:124`): `UPDATE chat_thread SET x=? WHERE chat_id=? AND sender_id=?`, and zeroing `unread_count` the way `Read` (`:65`) does |
 | store | `store/store.go:27` `Chat` interface | Add `SetHidden` / `SetCleared`; add `clearedAt` to `GetMessages` / `GetNewMessages` |
@@ -231,7 +232,7 @@ stays as it is.
 
 | # | Problem | Location |
 |---|---|---|
-| G1 | `Get` does not filter `status != Deleted`, so a room marked deleted is still readable and can still be sent to | `store/chat.go:26` |
+| G1 | `Get` does not filter `status != Deleted`, so a room marked deleted is still readable and can still be sent to. Note this is only a gap for the legacy "hidden forever" meaning — under the archive rules a hidden room *must* stay openable by direct link and still show every message (CHAT-102), so `Get` is deliberately left unfiltered for `hidden_at` | `store/chat.go:26` |
 | G2 | `Annotate` is not on the `service.Chat` interface, has zero callers monorepo-wide, and has no route | `store/chat.go:109`, `service/service.go:18` |
 | G3 | `models.ByStatus` errors out on `Deleted`, so a client can never list deleted rooms | `models/chat.go:308` |
 | G4 | `MessageStatus`'s `DeletedBySender` / `DeletedByReceiver` are **fully implemented on the read side** (`aggregateMessages` / `aggregateLastMessage`) but nothing in hire-sdk ever writes them | `service/chat.go:592,686` |

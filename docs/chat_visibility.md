@@ -100,6 +100,19 @@ Note this constraint applies to filtering done *after* the query. The room-level
 `cleared_at` cutoff in R2 is applied in SQL, so a page of `count` rows is always
 `count` rows the caller can see — it cannot cause the same problem.
 
+### These rules describe what a participant sees
+
+Every rule above is scoped to a `chat_thread` row, so reading one presupposes the
+caller has such a row. **A caller who does not is not a participant and gets 404 —
+before any of R1–R4 is considered.** This is not implied by the rules; it is the
+precondition for them making sense.
+
+Worth stating because the two are easy to conflate in code: the same lookup that
+fetches the caller's `hidden_at` / `cleared_at` is also the membership check. Using
+its result only for the cutoff, and querying messages by `chat_id` alone, hands any
+signed-in user any room whose id they can guess — the message queries filter by room,
+not by participant.
+
 ### How a new message un-archives a room
 
 R1 deliberately compares timestamps instead of using a boolean flag, so a new message

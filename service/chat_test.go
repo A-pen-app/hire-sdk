@@ -552,31 +552,28 @@ func TestArchiveAndDeleteInteract(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 9 / 9b — the per-message delete, which already exists
+// Scenario 9 / 9b — the per-message delete
 // ---------------------------------------------------------------------------
 
-// CHAT-311: a message the viewer deleted is dropped entirely. No "unsent" placeholder
-// is left in its place — that would read as the other party having unsent it.
-func TestPerMessageDeleteRemovesTheRowEntirely(t *testing.T) {
-	// hire-sdk has no per-message delete writer at all: the read side is fully
-	// implemented in aggregateMessages, but nothing ever sets DeletedBySender or
-	// DeletedByReceiver (gap G4 in docs/chat_visibility.md). megaphone is where this
-	// scenario runs today.
+// CHAT-311: a message the viewer deleted stays in the list and renders as unsent — the
+// row is never dropped, because a short page makes the mobile clients conclude there is
+// no older history (apen-api#180).
+//
+// hire-sdk has no per-message delete writer at all: the read side is implemented in
+// aggregateMessages, but nothing ever sets DeletedBySender or DeletedByReceiver (gap G4
+// in docs/chat_visibility.md). megaphone is where this scenario runs today.
+func TestPerMessageDeleteRendersAsUnsentAndKeepsTheRow(t *testing.T) {
 	t.Skip("hire-sdk has no per-message delete writer (G4)")
 }
 
-// CHAT-311, the other direction: the sender deleting their own message hides it from
-// the sender only.
-func TestPerMessageDeleteBySenderHidesItFromTheSenderOnly(t *testing.T) {
-	// hire-sdk has no per-message delete writer at all: the read side is fully
-	// implemented in aggregateMessages, but nothing ever sets DeletedBySender or
-	// DeletedByReceiver (gap G4 in docs/chat_visibility.md). megaphone is where this
-	// scenario runs today.
+// CHAT-311, the other direction.
+func TestPerMessageDeleteBySenderRendersAsUnsentForTheSenderOnly(t *testing.T) {
 	t.Skip("hire-sdk has no per-message delete writer (G4)")
 }
 
-// CHAT-304: unsend is a different thing from a per-message delete — the row stays and
-// both sides see the placeholder.
+// CHAT-304: unsend is a different thing from a per-message delete in intent, even
+// though the two now render the same way — unsend affects both sides, a per-message
+// delete only the viewer.
 func TestUnsendKeepsTheRowForBothSides(t *testing.T) {
 	svc, c := setupRoom(t, 3)
 	ctx := context.Background()
@@ -594,11 +591,9 @@ func TestUnsendKeepsTheRowForBothSides(t *testing.T) {
 	}
 }
 
-// CHAT-303: the per-message delete and the room-level cutoff stack.
+// CHAT-303: the per-message delete and the room-level cutoff stack. The cutoff removes
+// rows (in SQL, so paging stays correct), the per-message delete only blanks one.
 func TestPerMessageDeleteStacksWithTheRoomCutoff(t *testing.T) {
-	// The room-level cutoff works here, but there is nothing to stack it with: hire-sdk
-	// has no per-message delete writer at all (gap G4 in docs/chat_visibility.md).
-	// megaphone is where this scenario runs today.
 	t.Skip("hire-sdk has no per-message delete writer (G4)")
 }
 

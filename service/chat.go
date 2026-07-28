@@ -732,12 +732,22 @@ func (s *chatService) aggregateMessages(ctx context.Context, userID string, nonF
 	msgs := []*models.Message{}
 	for i := range nonFilteredMsgs {
 		msg := nonFilteredMsgs[i]
-		// Rule R4: a message this user deleted is dropped entirely, leaving no
-		// placeholder — a placeholder would read as the other party having unsent it.
-		if models.IsMessageDeletedFor(msg.Status, msg.SenderID, userID) {
-			continue
-		}
+		// Rule R4: a message this user deleted renders as unsent for them — the row
+		// stays in the list.
+		//
+		// Dropping it is what this used to do, and it is a client-visible bug: the
+		// mobile clients decide whether older history exists by asking "did I get
+		// `count` messages back?", so a short page makes them conclude there is nothing
+		// older and the user silently loses everything before the first deleted
+		// message. apen-api hit exactly this and moved from dropping to marking
+		// (apen-api#180). Do not turn this back into a continue.
+		//
+		// The product direction is to retire per-message delete in favour of unsend,
+		// which is why the two render identically.
 		status := msg.Status
+		if models.IsMessageDeletedFor(status, msg.SenderID, userID) {
+			status |= models.Unsent
+		}
 		switch {
 		case status.HasOneOf(models.Unsent):
 			// wipe out message content for unsent

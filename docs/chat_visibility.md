@@ -78,18 +78,27 @@ leaves the message hidden and the room archived (test cases CHAT-305 / CHAT-306)
 Setting `hidden_at` or `cleared_at` always zeroes that row's unread count and
 recalculates the user-level total. Archive and delete both count as reading the room.
 
-**R4 — A per-message delete removes the row entirely**
+**R4 — A per-message delete renders as "unsent", it does not remove the row**
 
-A message the viewer deleted is not emitted at all. No placeholder is left behind.
+A message the viewer deleted stays in the list and is marked unsent for them. A later
+message that quotes it still renders, with its quoted preview marked unavailable.
 
-Never represent the viewer's own deletion as `Unsent`: that placeholder reads as "the
-other party unsent this", which is not what happened. Unsend and per-message delete are
-different things — unsend leaves a placeholder for both sides, per-message delete hides
-the message from one side and leaves no trace.
+**Dropping the row is not an option, and this is not a style preference.** The mobile
+clients page by asking "did I get `count` messages back?" to decide whether older
+history exists. A dropped row makes a full page come back short, so the client
+concludes there is nothing older and the user silently loses access to everything
+before the first deleted message. apen-api hit exactly this and moved from dropping to
+marking (apen-api#180); the remaining implementations that still drop carry the same
+bug.
 
-If a later message replies to a message I deleted, the reply itself is still shown, but
-its quoted preview is marked unavailable and its content cleared (test cases
-CHAT-311 / CHAT-312).
+Product direction, agreed separately: per-message **delete is being retired in favour
+of unsend**. Clients are removing the entry point, and the server renders the two
+identically in the meantime, which is why R4 reads the way it does. Do not "fix" a
+deleted message back into a dropped row.
+
+Note this constraint applies to filtering done *after* the query. The room-level
+`cleared_at` cutoff in R2 is applied in SQL, so a page of `count` rows is always
+`count` rows the caller can see — it cannot cause the same problem.
 
 ### How a new message un-archives a room
 
@@ -129,7 +138,7 @@ refer to the [test case page](https://handbook.penpeer.co/engineering/social/cha
 | 7 | An archived room | Never appears in any list query, including paging and unread-only | CHAT-107 |
 | 8 | Two more messages after a delete | Cutoff not reset; A sees only those two | CHAT-205 |
 | 9 | Per-message delete stacked on the room cutoff | Both apply; visible = after cutoff, minus per-message deletes | CHAT-303 |
-| 9b | How a per-message delete renders | Row removed entirely, no "unsent" placeholder; a reply's quote is marked unavailable | CHAT-311 / 312 |
+| 9b | How a per-message delete renders | Row kept and marked unsent; a reply's quote is marked unavailable. Dropping it breaks client paging | CHAT-311 / 312 |
 | 10 | Message timestamp equals `hidden_at` / `cleared_at` | Not visible / not restored (strictly greater) | CHAT-305 / 306 |
 | 11 | A archives with 3 unread | A's room unread and global badge both drop to zero; B unaffected | CHAT-106 |
 | 12 | megaphone's legacy `status=Deleted` | A new message still does not bring the room back (legacy behaviour preserved) | CHAT-401 |

@@ -404,7 +404,7 @@ func (s *chatService) FetchNewMessages(ctx context.Context, bundleID, userID, ch
 		return nil, err
 	}
 
-	return s.aggregateMessages(ctx, userID, nonFilteredMsgs), nil
+	return s.aggregateMessages(ctx, userID, nonFilteredMsgs, chat.ClearedAt), nil
 }
 
 func (s *chatService) GetChatMessages(ctx context.Context, bundleID, userID, chatID string, next string, count int) ([]*models.Message, string, error) {
@@ -433,7 +433,7 @@ func (s *chatService) GetChatMessages(ctx context.Context, bundleID, userID, cha
 		return nil, "", err
 	}
 
-	msgs := s.aggregateMessages(ctx, userID, nonFilteredMsgs)
+	msgs := s.aggregateMessages(ctx, userID, nonFilteredMsgs, chat.ClearedAt)
 
 	// prepare next cursor
 	next = ""
@@ -481,7 +481,7 @@ func (s *chatService) SendMessage(ctx context.Context, bundleID, userID, chatID 
 		logging.Errorw(ctx, "get message failed", "err", err, "message_id", msgID)
 		return nil, err
 	}
-	s.injectContent(ctx, userID, msg, true)
+	s.injectContent(ctx, userID, msg, true, nil)
 
 	return msg, nil
 }
@@ -652,7 +652,7 @@ func (s *chatService) aggregateLastMessage(ctx context.Context, userID string, m
 	msg.Status = models.Normal
 
 	if isInjectContent {
-		if err := s.injectContent(ctx, userID, msg, false); err != nil {
+		if err := s.injectContent(ctx, userID, msg, false, clearedAt); err != nil {
 			logging.Errorw(ctx, "inject content to message failed", "err", err, "msgID", msgID, "userID", userID)
 			return nil, err
 		}
@@ -662,7 +662,7 @@ func (s *chatService) aggregateLastMessage(ctx context.Context, userID string, m
 }
 
 // injectContent processes message content based on type and handles reply messages (without user info)
-func (s *chatService) injectContent(ctx context.Context, userID string, msg *models.Message, injectReplyTo bool) error {
+func (s *chatService) injectContent(ctx context.Context, userID string, msg *models.Message, injectReplyTo bool, clearedAt *time.Time) error {
 	switch msg.Type {
 	case models.MsgText:
 		if msg.Body == nil {
@@ -704,7 +704,8 @@ func (s *chatService) injectContent(ctx context.Context, userID string, msg *mod
 		}
 		status := replyMsg.Status
 		switch {
-		case status.HasOneOf(models.DeletedBySender) && userID == replyMsg.SenderID,
+		case !models.IsAfterCutoff(replyMsg.CreatedAt, clearedAt),
+			status.HasOneOf(models.DeletedBySender) && userID == replyMsg.SenderID,
 			status.HasOneOf(models.DeletedByReceiver) && userID != replyMsg.SenderID,
 			status.HasOneOf(models.Unsent):
 
@@ -719,7 +720,7 @@ func (s *chatService) injectContent(ctx context.Context, userID string, msg *mod
 			replyMsg.Status = models.Normal
 		}
 
-		if err := s.injectContent(ctx, userID, replyMsg, false); err != nil {
+		if err := s.injectContent(ctx, userID, replyMsg, false, clearedAt); err != nil {
 			return err
 		}
 
@@ -728,7 +729,7 @@ func (s *chatService) injectContent(ctx context.Context, userID string, msg *mod
 	return nil
 }
 
-func (s *chatService) aggregateMessages(ctx context.Context, userID string, nonFilteredMsgs []*models.Message) []*models.Message {
+func (s *chatService) aggregateMessages(ctx context.Context, userID string, nonFilteredMsgs []*models.Message, clearedAt *time.Time) []*models.Message {
 	msgs := []*models.Message{}
 	for i := range nonFilteredMsgs {
 		msg := nonFilteredMsgs[i]
@@ -759,7 +760,7 @@ func (s *chatService) aggregateMessages(ctx context.Context, userID string, nonF
 			msg.Status = models.Normal
 		}
 
-		s.injectContent(ctx, userID, msg, true)
+		s.injectContent(ctx, userID, msg, true, clearedAt)
 
 		msgs = append(msgs, msg)
 	}

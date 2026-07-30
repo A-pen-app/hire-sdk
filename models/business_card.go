@@ -20,14 +20,27 @@ type BusinessCardContent struct {
 	CurrentOrganization *string `json:"current_organization,omitempty"`
 	CurrentJobTitle     *string `json:"current_job_title,omitempty"`
 
-	// ExperienceYears is apen-only, mirroring user.experience_years in apen's
+	// ExperienceYears is apen-only, mirroring user.year_of_experience in apen's
 	// main DB with its sentinel encoding: 0 = less than 1 year (also
 	// no-experience and students), 21 = more than 20 years. Never render the
 	// raw value — decode via FormatExperienceYears.
-	ExperienceYears *int `json:"experience_years,omitempty"`
+	//
+	// The Go field keeps the ExperienceYears name even though the wire/jsonb key
+	// is year_of_experience: YearOfExperience* is already taken by the 12-step
+	// YearOfExperienceType ordinals in resume.go, which mean something else.
+	ExperienceYears *int `json:"year_of_experience,omitempty"`
+
+	// ExperienceYearsUpdatedAt stamps when ExperienceYears was last set. The card
+	// stores a BASELINE; the value shown to users auto-increments from this
+	// timestamp (effective = baseline + whole years elapsed, capped by position).
+	// apen keeps the same pair on user and on the social card so each surface
+	// computes the effective value independently — see apen's
+	// models.EffectiveExperienceYears. nil means "never set, do not increment".
+	ExperienceYearsUpdatedAt *time.Time `json:"year_of_experience_updated_at,omitempty"`
 
 	// ExperienceRange is the nurse / phar range-based tenure; mutually
-	// exclusive with ExperienceYears.
+	// exclusive with ExperienceYears. Range-based tenure is a fixed bucket and
+	// does NOT auto-increment, so it carries no updated-at stamp.
 	ExperienceRange *ExperienceRange `json:"experience_range,omitempty"`
 
 	// PreferredLocations is dual-written with the resume's preferred_locations:

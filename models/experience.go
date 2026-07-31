@@ -3,8 +3,14 @@ package models
 import "strconv"
 
 // Sentinel values for the apen absolute-tenure encoding used by
-// BusinessCardContent.ExperienceYears (and user.experience_years in apen's
+// BusinessCardContent.YearOfExperience (and user.year_of_experience in apen's
 // main DB). Values in between are literal year counts.
+//
+// These keep the ExperienceYears* prefix rather than following the field
+// rename: YearOfExperienceLessThanOne is already the 12-step ordinal for the
+// same bucket in resume.go, and two constants of that name cannot coexist.
+// The prefix difference is the reminder that these belong to the 0..21
+// encoding, not the 0..11 one.
 const (
 	ExperienceYearsLessThanOne = 0  // "1年以下"; also covers no-experience and students
 	ExperienceYearsTwentyPlus  = 21 // "20年以上"; never a literal year count

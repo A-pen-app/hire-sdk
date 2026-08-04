@@ -136,6 +136,19 @@ func TestListReceivedCursorFormat(t *testing.T) {
 			at:   time.Date(2026, 8, 4, 12, 0, 5, 0, time.FixedZone("CST", 8*60*60)),
 			want: "2026-08-04 12:00:05",
 		},
+		// Values taken from the column itself. Postgres trims trailing zeros
+		// off the fraction, so the layout has to as well or the cursor stops
+		// matching what is stored.
+		{
+			name: "full microseconds, as stored",
+			at:   time.Date(2025, 7, 18, 7, 28, 13, 851711000, time.UTC),
+			want: "2025-07-18 07:28:13.851711",
+		},
+		{
+			name: "a trimmed fraction, as stored",
+			at:   time.Date(2025, 10, 23, 13, 53, 55, 19300000, time.UTC),
+			want: "2025-10-23 13:53:55.0193",
+		},
 	}
 
 	for _, c := range cases {

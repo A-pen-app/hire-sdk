@@ -80,7 +80,9 @@ func (s *resumeService) GetUserAppliedPostIDs(ctx context.Context, bundleID, use
 // ListReceived returns one page of relations for resumes sent to the given
 // posts, newest first, plus the cursor for the next page ("" when there is none).
 func (s *resumeService) ListReceived(ctx context.Context, bundleID string, postIDs []string, next string, count int) ([]*models.ResumeRelation, string, error) {
-	if count == 0 {
+	// <=0, not ==0: a negative count would send LIMIT 0 and then index
+	// relations[count-1] out of range
+	if count <= 0 {
 		return []*models.ResumeRelation{}, next, nil
 	}
 

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -170,21 +171,28 @@ func TestListReceivedCursorFormat(t *testing.T) {
 	}
 }
 
-func TestListReceivedZeroCountSkipsTheStore(t *testing.T) {
-	r := &fakeResumeStore{relations: relationsAt(time.Now())}
-	s := NewResume(r, fakeAppStore{}, nil)
+// A negative count used to reach the store as LIMIT 0 and then index
+// relations[count-1] out of range. Callers inside this repo clamp it, but the
+// SDK is consumed by three others.
+func TestListReceivedNonPositiveCountSkipsTheStore(t *testing.T) {
+	for _, count := range []int{0, -1, -20} {
+		t.Run(strconv.Itoa(count), func(t *testing.T) {
+			r := &fakeResumeStore{relations: relationsAt(time.Now(), time.Now())}
+			s := NewResume(r, fakeAppStore{}, nil)
 
-	got, next, err := s.ListReceived(context.Background(), "com.yoku.apen", []string{"post-1"}, "cursor", 0)
-	if err != nil {
-		t.Fatalf("ListReceived: %v", err)
-	}
-	if len(got) != 0 {
-		t.Errorf("returned %d relations, want none", len(got))
-	}
-	if next != "cursor" {
-		t.Errorf("next = %q, want the cursor handed in", next)
-	}
-	if r.gotCount != 0 {
-		t.Error("store was queried for a zero-sized page")
+			got, next, err := s.ListReceived(context.Background(), "com.yoku.apen", []string{"post-1"}, "cursor", count)
+			if err != nil {
+				t.Fatalf("ListReceived: %v", err)
+			}
+			if len(got) != 0 {
+				t.Errorf("returned %d relations, want none", len(got))
+			}
+			if next != "cursor" {
+				t.Errorf("next = %q, want the cursor handed in", next)
+			}
+			if r.gotCount != 0 {
+				t.Error("store was queried for a non-positive page")
+			}
+		})
 	}
 }

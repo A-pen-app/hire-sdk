@@ -182,6 +182,10 @@ type ResumeRelation struct {
 	Status     ResumeStatus `json:"-" db:"status"`
 }
 
+// CursorTimeLayout renders a resume-list cursor. created_at is "timestamp
+// without time zone", so the cursor carries no offset either.
+const CursorTimeLayout = "2006-01-02 15:04:05.999999"
+
 type ResumeStatus int
 
 const (

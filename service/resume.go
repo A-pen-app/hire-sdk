@@ -77,6 +77,35 @@ func (s *resumeService) GetUserAppliedPostIDs(ctx context.Context, bundleID, use
 	return postIDs, nil
 }
 
+// ListReceived returns one page of relations for resumes sent to the given
+// posts, newest first, plus the cursor for the next page ("" when there is none).
+func (s *resumeService) ListReceived(ctx context.Context, bundleID string, postIDs []string, next string, count int) ([]*models.ResumeRelation, string, error) {
+	if count == 0 {
+		return []*models.ResumeRelation{}, next, nil
+	}
+
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return nil, "", err
+	}
+
+	// one extra row tells us whether a further page exists
+	relations, err := s.r.ListReceived(ctx, app.ID, postIDs, next, count+1)
+	if err != nil {
+		logging.Errorw(ctx, "failed to list received resume relations", "err", err, "appID", app.ID)
+		return nil, "", err
+	}
+
+	n := len(relations)
+	next = ""
+	if n > count {
+		next = relations[count-1].CreatedAt.Format(models.CursorTimeLayout)
+		n = count
+	}
+	return relations[:n], next, nil
+}
+
 func (s *resumeService) GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error) {
 	snapshot, err := s.r.GetSnapshot(ctx, snapshotID)
 	if err != nil {

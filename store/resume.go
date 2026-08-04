@@ -482,6 +482,47 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...m
 	return relations, nil
 }
 
+// ListReceived returns the relations for resumes sent to the given posts,
+// newest first. next is a timestamp cursor. Pair with ListSnapshots for the
+// contents.
+func (s *resumeStore) ListReceived(ctx context.Context, appID string, postIDs []string, next string, count int) ([]*models.ResumeRelation, error) {
+	relations := []*models.ResumeRelation{}
+	if len(postIDs) == 0 {
+		return relations, nil
+	}
+	if next == "" {
+		// +2 seconds so a resume created at almost the same moment is not skipped
+		next = time.Now().Add(2 * time.Second).Format(models.CursorTimeLayout)
+	}
+
+	query := `
+	SELECT
+		id,
+		app_id,
+		user_id,
+		snapshot_id,
+		post_id,
+		chat_id,
+		is_read,
+		created_at,
+		updated_at,
+		status
+	FROM public.resume_relation
+	WHERE app_id=?
+	AND post_id=ANY(?)
+	AND created_at<?::timestamp
+	ORDER BY created_at DESC
+	LIMIT ?
+	`
+	query = s.db.Rebind(query)
+
+	if err := s.db.SelectContext(ctx, &relations, query, appID, pq.Array(postIDs), next, count); err != nil {
+		logging.Errorw(ctx, "failed to list received resume relations", "err", err, "appID", appID, "postIDs", postIDs, "count", count)
+		return nil, err
+	}
+	return relations, nil
+}
+
 func (s *resumeStore) Read(ctx context.Context, snapshotID string) error {
 	query := `
 	UPDATE public.resume_relation

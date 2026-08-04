@@ -183,7 +183,8 @@ type ResumeRelation struct {
 }
 
 // CursorTimeLayout renders a resume-list cursor. created_at is "timestamp
-// without time zone", so the cursor carries no offset either.
+// without time zone", so the cursor carries no offset either — it is only ever
+// built from a created_at that was read back, never from a wall clock.
 const CursorTimeLayout = "2006-01-02 15:04:05.999999"
 
 type ResumeStatus int

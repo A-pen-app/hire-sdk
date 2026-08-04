@@ -490,10 +490,6 @@ func (s *resumeStore) ListReceived(ctx context.Context, appID string, postIDs []
 	if len(postIDs) == 0 {
 		return relations, nil
 	}
-	if next == "" {
-		// +2 seconds so a resume created at almost the same moment is not skipped
-		next = time.Now().Add(2 * time.Second).Format(models.CursorTimeLayout)
-	}
 
 	query := `
 	SELECT
@@ -509,14 +505,25 @@ func (s *resumeStore) ListReceived(ctx context.Context, appID string, postIDs []
 		status
 	FROM public.resume_relation
 	WHERE app_id=?
-	AND post_id=ANY(?)
-	AND created_at<?::timestamp
+	AND post_id=ANY(?)`
+	args := []interface{}{appID, pq.Array(postIDs)}
+
+	// No cursor on the first page. Defaulting it to "now" would mean picking a
+	// zone to render that "now" in, and created_at carries none.
+	if next != "" {
+		query += `
+	AND created_at<?::timestamp`
+		args = append(args, next)
+	}
+
+	query += `
 	ORDER BY created_at DESC
-	LIMIT ?
-	`
+	LIMIT ?`
+	args = append(args, count)
+
 	query = s.db.Rebind(query)
 
-	if err := s.db.SelectContext(ctx, &relations, query, appID, pq.Array(postIDs), next, count); err != nil {
+	if err := s.db.SelectContext(ctx, &relations, query, args...); err != nil {
 		logging.Errorw(ctx, "failed to list received resume relations", "err", err, "appID", appID, "postIDs", postIDs, "count", count)
 		return nil, err
 	}

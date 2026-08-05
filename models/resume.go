@@ -253,6 +253,9 @@ func ByPostID(postID string) GetRelationOptionFunc {
 type ListRelationOption struct {
 	After   *time.Time
 	ChatIDs []string
+	PostIDs []string
+	Before  *time.Time
+	Count   int
 }
 type ListRelationOptionFunc func(*ListRelationOption) error
 
@@ -266,6 +269,26 @@ func ByAfter(after time.Time) ListRelationOptionFunc {
 func ByChatIDs(chatIDs []string) ListRelationOptionFunc {
 	return func(opt *ListRelationOption) error {
 		opt.ChatIDs = chatIDs
+		return nil
+	}
+}
+
+func ByPostIDs(postIDs []string) ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		opt.PostIDs = postIDs
+		return nil
+	}
+}
+
+// Paginate takes the newest count relations older than before (a zero time
+// starts from the newest). Ordering rides along: a LIMIT without one is
+// arbitrary.
+func Paginate(before time.Time, count int) ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		if !before.IsZero() {
+			opt.Before = &before
+		}
+		opt.Count = count
 		return nil
 	}
 }

@@ -471,6 +471,21 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...m
 		args = append(args, pq.Array(opt.ChatIDs))
 	}
 
+	if len(opt.PostIDs) > 0 {
+		query += ` AND post_id = ANY(?)`
+		args = append(args, pq.Array(opt.PostIDs))
+	}
+
+	if opt.Before != nil {
+		query += ` AND created_at < ?::timestamp`
+		args = append(args, *opt.Before)
+	}
+
+	if opt.Count > 0 {
+		query += ` ORDER BY created_at DESC LIMIT ?`
+		args = append(args, opt.Count)
+	}
+
 	query = s.db.Rebind(query)
 
 	var relations []*models.ResumeRelation

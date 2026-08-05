@@ -471,60 +471,28 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...m
 		args = append(args, pq.Array(opt.ChatIDs))
 	}
 
+	if len(opt.PostIDs) > 0 {
+		query += ` AND post_id = ANY(?)`
+		args = append(args, pq.Array(opt.PostIDs))
+	}
+
+	// cast to match the column: created_at is timestamp without time zone
+	if opt.Before != nil {
+		query += ` AND created_at < ?::timestamp`
+		args = append(args, *opt.Before)
+	}
+
+	if opt.Count > 0 {
+		query += ` ORDER BY created_at DESC LIMIT ?`
+		args = append(args, opt.Count)
+	}
+
 	query = s.db.Rebind(query)
 
 	var relations []*models.ResumeRelation
 	err := s.db.Select(&relations, query, args...)
 	if err != nil {
 		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", appID, "opts", opts)
-		return nil, err
-	}
-	return relations, nil
-}
-
-// ListReceived returns the relations for resumes sent to the given posts,
-// newest first. next is a timestamp cursor. Pair with ListSnapshots for the
-// contents.
-func (s *resumeStore) ListReceived(ctx context.Context, appID string, postIDs []string, next string, count int) ([]*models.ResumeRelation, error) {
-	relations := []*models.ResumeRelation{}
-	if len(postIDs) == 0 {
-		return relations, nil
-	}
-
-	query := `
-	SELECT
-		id,
-		app_id,
-		user_id,
-		snapshot_id,
-		post_id,
-		chat_id,
-		is_read,
-		created_at,
-		updated_at,
-		status
-	FROM public.resume_relation
-	WHERE app_id=?
-	AND post_id=ANY(?)`
-	args := []interface{}{appID, pq.Array(postIDs)}
-
-	// No cursor on the first page. Defaulting it to "now" would mean picking a
-	// zone to render that "now" in, and created_at carries none.
-	if next != "" {
-		query += `
-	AND created_at<?::timestamp`
-		args = append(args, next)
-	}
-
-	query += `
-	ORDER BY created_at DESC
-	LIMIT ?`
-	args = append(args, count)
-
-	query = s.db.Rebind(query)
-
-	if err := s.db.SelectContext(ctx, &relations, query, args...); err != nil {
-		logging.Errorw(ctx, "failed to list received resume relations", "err", err, "appID", appID, "postIDs", postIDs, "count", count)
 		return nil, err
 	}
 	return relations, nil

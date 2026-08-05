@@ -182,9 +182,8 @@ type ResumeRelation struct {
 	Status     ResumeStatus `json:"-" db:"status"`
 }
 
-// CursorTimeLayout renders a resume-list cursor. created_at is "timestamp
-// without time zone", so the cursor carries no offset either — it is only ever
-// built from a created_at that was read back, never from a wall clock.
+// CursorTimeLayout renders a relation cursor. created_at is "timestamp without
+// time zone", so the cursor carries no offset either.
 const CursorTimeLayout = "2006-01-02 15:04:05.999999"
 
 type ResumeStatus int
@@ -258,6 +257,9 @@ func ByPostID(postID string) GetRelationOptionFunc {
 type ListRelationOption struct {
 	After   *time.Time
 	ChatIDs []string
+	PostIDs []string
+	Before  *string
+	Count   int
 }
 type ListRelationOptionFunc func(*ListRelationOption) error
 
@@ -271,6 +273,25 @@ func ByAfter(after time.Time) ListRelationOptionFunc {
 func ByChatIDs(chatIDs []string) ListRelationOptionFunc {
 	return func(opt *ListRelationOption) error {
 		opt.ChatIDs = chatIDs
+		return nil
+	}
+}
+
+func ByPostIDs(postIDs []string) ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		opt.PostIDs = postIDs
+		return nil
+	}
+}
+
+// Paginate takes the newest count relations older than before (empty starts
+// from the newest). Ordering rides along: a LIMIT without one is arbitrary.
+func Paginate(before string, count int) ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		if before != "" {
+			opt.Before = &before
+		}
+		opt.Count = count
 		return nil
 	}
 }

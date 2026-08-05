@@ -77,11 +77,10 @@ func (s *resumeService) GetUserAppliedPostIDs(ctx context.Context, bundleID, use
 	return postIDs, nil
 }
 
-// ListReceived returns one page of relations for resumes sent to the given
-// posts, newest first, plus the cursor for the next page ("" when there is none).
-func (s *resumeService) ListReceived(ctx context.Context, bundleID string, postIDs []string, next string, count int) ([]*models.ResumeRelation, string, error) {
-	// <=0, not ==0: a negative count would send LIMIT 0 and then index
-	// relations[count-1] out of range
+// ListRelations returns one page of relations, newest first, plus the cursor
+// for the next page ("" when there is none). Narrow it with the store's options.
+func (s *resumeService) ListRelations(ctx context.Context, bundleID string, next string, count int, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, string, error) {
+	// <=0, not ==0: a negative count would index relations[count-1]
 	if count <= 0 {
 		return []*models.ResumeRelation{}, next, nil
 	}
@@ -93,9 +92,9 @@ func (s *resumeService) ListReceived(ctx context.Context, bundleID string, postI
 	}
 
 	// one extra row tells us whether a further page exists
-	relations, err := s.r.ListReceived(ctx, app.ID, postIDs, next, count+1)
+	relations, err := s.r.ListRelations(ctx, app.ID, append(opts, models.Paginate(next, count+1))...)
 	if err != nil {
-		logging.Errorw(ctx, "failed to list received resume relations", "err", err, "appID", app.ID)
+		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", app.ID)
 		return nil, "", err
 	}
 

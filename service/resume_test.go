@@ -10,22 +10,28 @@ import (
 	"github.com/A-pen-app/hire-sdk/store"
 )
 
-// Embeds the interface so only the method under test is implemented; anything
-// else ListReceived reaches for panics instead of silently passing.
+// Embeds the interface so anything beyond the method under test panics rather
+// than silently passing.
 type fakeResumeStore struct {
 	store.Resume
 
 	relations []*models.ResumeRelation
 
-	gotAppID   string
-	gotPostIDs []string
-	gotNext    string
-	gotCount   int
+	gotAppID string
+	gotOpt   models.ListRelationOption
 }
 
-func (f *fakeResumeStore) ListReceived(ctx context.Context, appID string, postIDs []string, next string, count int) ([]*models.ResumeRelation, error) {
-	f.gotAppID, f.gotPostIDs, f.gotNext, f.gotCount = appID, postIDs, next, count
-	if count > len(f.relations) {
+func (f *fakeResumeStore) ListRelations(ctx context.Context, appID string, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, error) {
+	f.gotAppID = appID
+	f.gotOpt = models.ListRelationOption{}
+	for _, apply := range opts {
+		if err := apply(&f.gotOpt); err != nil {
+			return nil, err
+		}
+	}
+
+	count := f.gotOpt.Count
+	if count == 0 || count > len(f.relations) {
 		count = len(f.relations)
 	}
 	return f.relations[:count], nil
@@ -47,7 +53,7 @@ func relationsAt(times ...time.Time) []*models.ResumeRelation {
 	return relations
 }
 
-func TestListReceivedPaging(t *testing.T) {
+func TestListRelationsPaging(t *testing.T) {
 	// Descending, and the middle two share a second: the cursor has to keep
 	// sub-second precision or the second page skips one of them.
 	base := time.Date(2026, 8, 4, 12, 0, 5, 0, time.UTC)
@@ -93,9 +99,9 @@ func TestListReceivedPaging(t *testing.T) {
 			r := &fakeResumeStore{relations: c.relations}
 			s := NewResume(r, fakeAppStore{}, nil)
 
-			got, next, err := s.ListReceived(context.Background(), "com.yoku.apen", []string{"post-1"}, "", c.count)
+			got, next, err := s.ListRelations(context.Background(), "com.yoku.apen", "", c.count, models.ByPostIDs([]string{"post-1"}))
 			if err != nil {
-				t.Fatalf("ListReceived: %v", err)
+				t.Fatalf("ListRelations: %v", err)
 			}
 			if len(got) != c.wantLen {
 				t.Errorf("returned %d relations, want %d", len(got), c.wantLen)
@@ -104,11 +110,15 @@ func TestListReceivedPaging(t *testing.T) {
 				t.Errorf("next = %q, want %q", next, c.wantNext)
 			}
 			// one extra row is what tells the service another page exists
-			if r.gotCount != c.count+1 {
-				t.Errorf("asked the store for %d rows, want %d", r.gotCount, c.count+1)
+			if r.gotOpt.Count != c.count+1 {
+				t.Errorf("asked the store for %d rows, want %d", r.gotOpt.Count, c.count+1)
 			}
 			if r.gotAppID != "app-1" {
 				t.Errorf("app ID = %q, want the one resolved from the bundle ID", r.gotAppID)
+			}
+			// caller options must survive alongside the pagination one
+			if len(r.gotOpt.PostIDs) != 1 || r.gotOpt.PostIDs[0] != "post-1" {
+				t.Errorf("post IDs = %v, want the caller's option to reach the store", r.gotOpt.PostIDs)
 			}
 		})
 	}
@@ -116,7 +126,7 @@ func TestListReceivedPaging(t *testing.T) {
 
 // The cursor feeds straight into "created_at < ?::timestamp", so it must carry
 // no offset and keep the fraction the column stores.
-func TestListReceivedCursorFormat(t *testing.T) {
+func TestListRelationsCursorFormat(t *testing.T) {
 	cases := []struct {
 		name string
 		at   time.Time
@@ -157,9 +167,9 @@ func TestListReceivedCursorFormat(t *testing.T) {
 			r := &fakeResumeStore{relations: relationsAt(c.at, c.at.Add(-time.Second))}
 			s := NewResume(r, fakeAppStore{}, nil)
 
-			_, next, err := s.ListReceived(context.Background(), "com.yoku.apen", []string{"post-1"}, "", 1)
+			_, next, err := s.ListRelations(context.Background(), "com.yoku.apen", "", 1)
 			if err != nil {
-				t.Fatalf("ListReceived: %v", err)
+				t.Fatalf("ListRelations: %v", err)
 			}
 			if next != c.want {
 				t.Errorf("next = %q, want %q", next, c.want)
@@ -171,18 +181,33 @@ func TestListReceivedCursorFormat(t *testing.T) {
 	}
 }
 
-// A negative count used to reach the store as LIMIT 0 and then index
-// relations[count-1] out of range. Callers inside this repo clamp it, but the
-// SDK is consumed by three others.
-func TestListReceivedNonPositiveCountSkipsTheStore(t *testing.T) {
+// If the cursor never reaches the store, every page returns the newest rows.
+func TestListRelationsForwardsTheCursor(t *testing.T) {
+	r := &fakeResumeStore{relations: relationsAt(time.Now())}
+	s := NewResume(r, fakeAppStore{}, nil)
+
+	if _, _, err := s.ListRelations(context.Background(), "com.yoku.apen", "2026-08-04 12:00:05.5", 20); err != nil {
+		t.Fatalf("ListRelations: %v", err)
+	}
+	if r.gotOpt.Before == nil {
+		t.Fatal("cursor never reached the store")
+	}
+	if *r.gotOpt.Before != "2026-08-04 12:00:05.5" {
+		t.Errorf("cursor = %q, want the one handed in", *r.gotOpt.Before)
+	}
+}
+
+// A negative count used to panic on relations[count-1]. apen clamps it, but
+// three other repos consume this SDK.
+func TestListRelationsNonPositiveCountSkipsTheStore(t *testing.T) {
 	for _, count := range []int{0, -1, -20} {
 		t.Run(strconv.Itoa(count), func(t *testing.T) {
 			r := &fakeResumeStore{relations: relationsAt(time.Now(), time.Now())}
 			s := NewResume(r, fakeAppStore{}, nil)
 
-			got, next, err := s.ListReceived(context.Background(), "com.yoku.apen", []string{"post-1"}, "cursor", count)
+			got, next, err := s.ListRelations(context.Background(), "com.yoku.apen", "cursor", count)
 			if err != nil {
-				t.Fatalf("ListReceived: %v", err)
+				t.Fatalf("ListRelations: %v", err)
 			}
 			if len(got) != 0 {
 				t.Errorf("returned %d relations, want none", len(got))
@@ -190,7 +215,7 @@ func TestListReceivedNonPositiveCountSkipsTheStore(t *testing.T) {
 			if next != "cursor" {
 				t.Errorf("next = %q, want the cursor handed in", next)
 			}
-			if r.gotCount != 0 {
+			if r.gotAppID != "" {
 				t.Error("store was queried for a non-positive page")
 			}
 		})

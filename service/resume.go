@@ -83,9 +83,6 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID string, offs
 	if count <= 0 {
 		return []*models.ResumeRelation{}, nil
 	}
-	if offset < 0 {
-		offset = 0
-	}
 
 	app, err := s.a.GetByBundleID(ctx, bundleID)
 	if err != nil {

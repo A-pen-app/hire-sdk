@@ -117,16 +117,24 @@ func TestListRelationsPaging(t *testing.T) {
 	}
 }
 
-// A negative offset would reach SQL as a negative OFFSET.
-func TestListRelationsClampsNegativeOffset(t *testing.T) {
+// Postgres rejects a negative OFFSET, and the store is reachable without going
+// through the service, so Paginate clamps it.
+func TestPaginateClampsNegativeOffset(t *testing.T) {
+	opt := models.ListRelationOption{}
+	if err := models.Paginate(-5, 20)(&opt); err != nil {
+		t.Fatalf("Paginate: %v", err)
+	}
+	if opt.Offset != 0 {
+		t.Errorf("offset = %d, want it clamped to 0", opt.Offset)
+	}
+
 	r := &fakeResumeStore{relations: relationsAt(time.Now(), time.Now())}
 	s := NewResume(r, fakeAppStore{}, nil)
-
 	if _, err := s.ListRelations(context.Background(), "com.yoku.apen", -5, 20); err != nil {
 		t.Fatalf("ListRelations: %v", err)
 	}
 	if r.gotOpt.Offset != 0 {
-		t.Errorf("offset = %d, want it clamped to 0", r.gotOpt.Offset)
+		t.Errorf("offset reaching the store = %d, want 0", r.gotOpt.Offset)
 	}
 }
 

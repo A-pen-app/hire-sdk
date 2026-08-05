@@ -2,13 +2,24 @@ package service
 
 import (
 	"context"
+	"os"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/A-pen-app/hire-sdk/models"
 	"github.com/A-pen-app/hire-sdk/store"
+	"github.com/A-pen-app/logging"
 )
+
+// The service logs unconditionally on some paths, and logging.Infow panics on
+// a nil zap logger.
+func TestMain(m *testing.M) {
+	if err := logging.Initialize(nil); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
 
 // Embeds the interface so anything beyond the method under test panics rather
 // than silently passing.
@@ -90,7 +101,7 @@ func TestListRelationsPaging(t *testing.T) {
 			relations: page,
 			count:     3,
 			wantLen:   3,
-			wantNext:  "2026-08-04 12:00:05.5",
+			wantNext:  "2026-08-04T12:00:05.5Z",
 		},
 	}
 
@@ -124,8 +135,8 @@ func TestListRelationsPaging(t *testing.T) {
 	}
 }
 
-// The cursor feeds straight into "created_at < ?::timestamp", so it must carry
-// no offset and keep the fraction the column stores.
+// The cursor feeds straight into "created_at < ?::timestamp", so it has to keep
+// the fraction the column stores. Same format as the created_at the caller saw.
 func TestListRelationsCursorFormat(t *testing.T) {
 	cases := []struct {
 		name string
@@ -135,30 +146,29 @@ func TestListRelationsCursorFormat(t *testing.T) {
 		{
 			name: "microseconds survive",
 			at:   time.Date(2026, 8, 4, 12, 0, 5, 123456000, time.UTC),
-			want: "2026-08-04 12:00:05.123456",
+			want: "2026-08-04T12:00:05.123456Z",
 		},
 		{
 			name: "a whole second carries no fraction",
 			at:   time.Date(2026, 8, 4, 12, 0, 5, 0, time.UTC),
-			want: "2026-08-04 12:00:05",
+			want: "2026-08-04T12:00:05Z",
 		},
 		{
-			name: "a non-UTC location is rendered as wall clock, no offset",
+			name: "a non-UTC location keeps its offset; the cast drops it",
 			at:   time.Date(2026, 8, 4, 12, 0, 5, 0, time.FixedZone("CST", 8*60*60)),
-			want: "2026-08-04 12:00:05",
+			want: "2026-08-04T12:00:05+08:00",
 		},
-		// Values taken from the column itself. Postgres trims trailing zeros
-		// off the fraction, so the layout has to as well or the cursor stops
-		// matching what is stored.
+		// Values taken from the column itself: the fraction must survive
+		// unpadded and untruncated.
 		{
 			name: "full microseconds, as stored",
 			at:   time.Date(2025, 7, 18, 7, 28, 13, 851711000, time.UTC),
-			want: "2025-07-18 07:28:13.851711",
+			want: "2025-07-18T07:28:13.851711Z",
 		},
 		{
 			name: "a trimmed fraction, as stored",
 			at:   time.Date(2025, 10, 23, 13, 53, 55, 19300000, time.UTC),
-			want: "2025-10-23 13:53:55.0193",
+			want: "2025-10-23T13:53:55.0193Z",
 		},
 	}
 
@@ -174,7 +184,7 @@ func TestListRelationsCursorFormat(t *testing.T) {
 			if next != c.want {
 				t.Errorf("next = %q, want %q", next, c.want)
 			}
-			if _, err := time.Parse(models.CursorTimeLayout, next); err != nil {
+			if _, err := time.Parse(time.RFC3339Nano, next); err != nil {
 				t.Errorf("cursor does not round-trip through its own layout: %v", err)
 			}
 		})
@@ -186,14 +196,33 @@ func TestListRelationsForwardsTheCursor(t *testing.T) {
 	r := &fakeResumeStore{relations: relationsAt(time.Now())}
 	s := NewResume(r, fakeAppStore{}, nil)
 
-	if _, _, err := s.ListRelations(context.Background(), "com.yoku.apen", "2026-08-04 12:00:05.5", 20); err != nil {
+	if _, _, err := s.ListRelations(context.Background(), "com.yoku.apen", "2026-08-04T12:00:05.5Z", 20); err != nil {
 		t.Fatalf("ListRelations: %v", err)
 	}
 	if r.gotOpt.Before == nil {
 		t.Fatal("cursor never reached the store")
 	}
-	if *r.gotOpt.Before != "2026-08-04 12:00:05.5" {
-		t.Errorf("cursor = %q, want the one handed in", *r.gotOpt.Before)
+	want := time.Date(2026, 8, 4, 12, 0, 5, 500000000, time.UTC)
+	if !r.gotOpt.Before.Equal(want) {
+		t.Errorf("cursor = %v, want %v", *r.gotOpt.Before, want)
+	}
+}
+
+// The cursor is opaque to the caller, so a mangled or stale one falls back to
+// the newest rows instead of erroring or reaching the database.
+func TestListRelationsIgnoresAnUnparseableCursor(t *testing.T) {
+	for _, cursor := range []string{"2026-08-04 12:00:05.5", "not-a-time", "0"} {
+		t.Run(cursor, func(t *testing.T) {
+			r := &fakeResumeStore{relations: relationsAt(time.Now())}
+			s := NewResume(r, fakeAppStore{}, nil)
+
+			if _, _, err := s.ListRelations(context.Background(), "com.yoku.apen", cursor, 20); err != nil {
+				t.Fatalf("ListRelations: %v", err)
+			}
+			if r.gotOpt.Before != nil {
+				t.Errorf("cursor = %v, want the query left unbounded", *r.gotOpt.Before)
+			}
+		})
 	}
 }
 

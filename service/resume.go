@@ -85,6 +85,18 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID string, next
 		return []*models.ResumeRelation{}, next, nil
 	}
 
+	// An unparseable cursor starts from the newest rather than erroring: it is
+	// opaque to the caller, so a bad one means a stale or mangled link.
+	var before time.Time
+	if next != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, next)
+		if err != nil {
+			logging.Infow(ctx, "ignoring unparseable resume cursor", "next", next)
+		} else {
+			before = parsed
+		}
+	}
+
 	app, err := s.a.GetByBundleID(ctx, bundleID)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
@@ -92,7 +104,7 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID string, next
 	}
 
 	// one extra row tells us whether a further page exists
-	relations, err := s.r.ListRelations(ctx, app.ID, append(opts, models.Paginate(next, count+1))...)
+	relations, err := s.r.ListRelations(ctx, app.ID, append(opts, models.Paginate(before, count+1))...)
 	if err != nil {
 		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", app.ID)
 		return nil, "", err
@@ -101,7 +113,7 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID string, next
 	n := len(relations)
 	next = ""
 	if n > count {
-		next = relations[count-1].CreatedAt.Format(models.CursorTimeLayout)
+		next = relations[count-1].CreatedAt.Format(time.RFC3339Nano)
 		n = count
 	}
 	return relations[:n], next, nil

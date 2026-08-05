@@ -476,7 +476,6 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...m
 		args = append(args, pq.Array(opt.PostIDs))
 	}
 
-	// cast to match the column: created_at is timestamp without time zone
 	if opt.Before != nil {
 		query += ` AND created_at < ?::timestamp`
 		args = append(args, *opt.Before)

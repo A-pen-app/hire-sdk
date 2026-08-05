@@ -77,46 +77,25 @@ func (s *resumeService) GetUserAppliedPostIDs(ctx context.Context, bundleID, use
 	return postIDs, nil
 }
 
-// ListRelations returns one page of relations, newest first, plus the cursor
-// for the next page ("" when there is none). Narrow it with the store's options.
-func (s *resumeService) ListRelations(ctx context.Context, bundleID string, next string, count int, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, string, error) {
-	// <=0, not ==0: a negative count would index relations[count-1]
+// ListRelations returns one page of relations, newest first. Narrow it with
+// the store's options.
+func (s *resumeService) ListRelations(ctx context.Context, bundleID string, offset, count int, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, error) {
 	if count <= 0 {
-		return []*models.ResumeRelation{}, next, nil
-	}
-
-	// An unparseable cursor starts from the newest rather than erroring: it is
-	// opaque to the caller, so a bad one means a stale or mangled link.
-	var before time.Time
-	if next != "" {
-		parsed, err := time.Parse(time.RFC3339Nano, next)
-		if err != nil {
-			logging.Infow(ctx, "ignoring unparseable resume cursor", "next", next)
-		} else {
-			before = parsed
-		}
+		return []*models.ResumeRelation{}, nil
 	}
 
 	app, err := s.a.GetByBundleID(ctx, bundleID)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
-		return nil, "", err
+		return nil, err
 	}
 
-	// one extra row tells us whether a further page exists
-	relations, err := s.r.ListRelations(ctx, app.ID, append(opts, models.Paginate(before, count+1))...)
+	relations, err := s.r.ListRelations(ctx, app.ID, append(opts, models.Paginate(offset, count))...)
 	if err != nil {
 		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", app.ID)
-		return nil, "", err
+		return nil, err
 	}
-
-	n := len(relations)
-	next = ""
-	if n > count {
-		next = relations[count-1].CreatedAt.Format(time.RFC3339Nano)
-		n = count
-	}
-	return relations[:n], next, nil
+	return relations, nil
 }
 
 func (s *resumeService) GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error) {

@@ -12,8 +12,8 @@ import (
 	"github.com/A-pen-app/logging"
 )
 
-// The service logs unconditionally on some paths, and logging.Infow panics on
-// a nil zap logger.
+// The service logs unconditionally on some paths, and logging panics on a nil
+// zap logger.
 func TestMain(m *testing.M) {
 	if err := logging.Initialize(nil); err != nil {
 		panic(err)
@@ -41,11 +41,13 @@ func (f *fakeResumeStore) ListRelations(ctx context.Context, appID string, opts 
 		}
 	}
 
-	count := f.gotOpt.Count
-	if count == 0 || count > len(f.relations) {
-		count = len(f.relations)
+	// stand in for LIMIT/OFFSET
+	from := min(f.gotOpt.Offset, len(f.relations))
+	to := len(f.relations)
+	if f.gotOpt.Count > 0 {
+		to = min(from+f.gotOpt.Count, len(f.relations))
 	}
-	return f.relations[:count], nil
+	return f.relations[from:to], nil
 }
 
 type fakeAppStore struct {
@@ -65,8 +67,6 @@ func relationsAt(times ...time.Time) []*models.ResumeRelation {
 }
 
 func TestListRelationsPaging(t *testing.T) {
-	// Descending, and the middle two share a second: the cursor has to keep
-	// sub-second precision or the second page skips one of them.
 	base := time.Date(2026, 8, 4, 12, 0, 5, 0, time.UTC)
 	page := relationsAt(
 		base.Add(900*time.Millisecond),
@@ -76,53 +76,35 @@ func TestListRelationsPaging(t *testing.T) {
 	)
 
 	cases := []struct {
-		name      string
-		relations []*models.ResumeRelation
-		count     int
-		wantLen   int
-		wantNext  string
+		name    string
+		offset  int
+		count   int
+		wantLen int
+		wantAt  time.Time
 	}{
-		{
-			name:      "fewer than a full page ends the list",
-			relations: page[:2],
-			count:     3,
-			wantLen:   2,
-			wantNext:  "",
-		},
-		{
-			name:      "exactly one page ends the list",
-			relations: page[:3],
-			count:     3,
-			wantLen:   3,
-			wantNext:  "",
-		},
-		{
-			name:      "a further row yields the last returned row as the cursor",
-			relations: page,
-			count:     3,
-			wantLen:   3,
-			wantNext:  "2026-08-04T12:00:05.5Z",
-		},
+		{name: "first page", offset: 0, count: 2, wantLen: 2, wantAt: page[0].CreatedAt},
+		{name: "second page", offset: 2, count: 2, wantLen: 2, wantAt: page[2].CreatedAt},
+		{name: "a partial last page", offset: 3, count: 2, wantLen: 1, wantAt: page[3].CreatedAt},
+		{name: "past the end", offset: 10, count: 2, wantLen: 0},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := &fakeResumeStore{relations: c.relations}
+			r := &fakeResumeStore{relations: page}
 			s := NewResume(r, fakeAppStore{}, nil)
 
-			got, next, err := s.ListRelations(context.Background(), "com.yoku.apen", "", c.count, models.ByPostIDs([]string{"post-1"}))
+			got, err := s.ListRelations(context.Background(), "com.yoku.apen", c.offset, c.count, models.ByPostIDs([]string{"post-1"}))
 			if err != nil {
 				t.Fatalf("ListRelations: %v", err)
 			}
 			if len(got) != c.wantLen {
-				t.Errorf("returned %d relations, want %d", len(got), c.wantLen)
+				t.Fatalf("returned %d relations, want %d", len(got), c.wantLen)
 			}
-			if next != c.wantNext {
-				t.Errorf("next = %q, want %q", next, c.wantNext)
+			if c.wantLen > 0 && !got[0].CreatedAt.Equal(c.wantAt) {
+				t.Errorf("page starts at %v, want %v", got[0].CreatedAt, c.wantAt)
 			}
-			// one extra row is what tells the service another page exists
-			if r.gotOpt.Count != c.count+1 {
-				t.Errorf("asked the store for %d rows, want %d", r.gotOpt.Count, c.count+1)
+			if r.gotOpt.Offset != c.offset || r.gotOpt.Count != c.count {
+				t.Errorf("store got offset=%d count=%d, want %d/%d", r.gotOpt.Offset, r.gotOpt.Count, c.offset, c.count)
 			}
 			if r.gotAppID != "app-1" {
 				t.Errorf("app ID = %q, want the one resolved from the bundle ID", r.gotAppID)
@@ -135,114 +117,40 @@ func TestListRelationsPaging(t *testing.T) {
 	}
 }
 
-// The cursor feeds straight into "created_at < ?::timestamp", so it has to keep
-// the fraction the column stores. Same format as the created_at the caller saw.
-func TestListRelationsCursorFormat(t *testing.T) {
-	cases := []struct {
-		name string
-		at   time.Time
-		want string
-	}{
-		{
-			name: "microseconds survive",
-			at:   time.Date(2026, 8, 4, 12, 0, 5, 123456000, time.UTC),
-			want: "2026-08-04T12:00:05.123456Z",
-		},
-		{
-			name: "a whole second carries no fraction",
-			at:   time.Date(2026, 8, 4, 12, 0, 5, 0, time.UTC),
-			want: "2026-08-04T12:00:05Z",
-		},
-		{
-			name: "a non-UTC location keeps its offset; the cast drops it",
-			at:   time.Date(2026, 8, 4, 12, 0, 5, 0, time.FixedZone("CST", 8*60*60)),
-			want: "2026-08-04T12:00:05+08:00",
-		},
-		// Values taken from the column itself: the fraction must survive
-		// unpadded and untruncated.
-		{
-			name: "full microseconds, as stored",
-			at:   time.Date(2025, 7, 18, 7, 28, 13, 851711000, time.UTC),
-			want: "2025-07-18T07:28:13.851711Z",
-		},
-		{
-			name: "a trimmed fraction, as stored",
-			at:   time.Date(2025, 10, 23, 13, 53, 55, 19300000, time.UTC),
-			want: "2025-10-23T13:53:55.0193Z",
-		},
+// Postgres rejects a negative OFFSET, and the store is reachable without going
+// through the service, so Paginate clamps it.
+func TestPaginateClampsNegativeOffset(t *testing.T) {
+	opt := models.ListRelationOption{}
+	if err := models.Paginate(-5, 20)(&opt); err != nil {
+		t.Fatalf("Paginate: %v", err)
+	}
+	if opt.Offset != 0 {
+		t.Errorf("offset = %d, want it clamped to 0", opt.Offset)
 	}
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			r := &fakeResumeStore{relations: relationsAt(c.at, c.at.Add(-time.Second))}
-			s := NewResume(r, fakeAppStore{}, nil)
-
-			_, next, err := s.ListRelations(context.Background(), "com.yoku.apen", "", 1)
-			if err != nil {
-				t.Fatalf("ListRelations: %v", err)
-			}
-			if next != c.want {
-				t.Errorf("next = %q, want %q", next, c.want)
-			}
-			if _, err := time.Parse(time.RFC3339Nano, next); err != nil {
-				t.Errorf("cursor does not round-trip through its own layout: %v", err)
-			}
-		})
-	}
-}
-
-// If the cursor never reaches the store, every page returns the newest rows.
-func TestListRelationsForwardsTheCursor(t *testing.T) {
-	r := &fakeResumeStore{relations: relationsAt(time.Now())}
+	r := &fakeResumeStore{relations: relationsAt(time.Now(), time.Now())}
 	s := NewResume(r, fakeAppStore{}, nil)
-
-	if _, _, err := s.ListRelations(context.Background(), "com.yoku.apen", "2026-08-04T12:00:05.5Z", 20); err != nil {
+	if _, err := s.ListRelations(context.Background(), "com.yoku.apen", -5, 20); err != nil {
 		t.Fatalf("ListRelations: %v", err)
 	}
-	if r.gotOpt.Before == nil {
-		t.Fatal("cursor never reached the store")
-	}
-	want := time.Date(2026, 8, 4, 12, 0, 5, 500000000, time.UTC)
-	if !r.gotOpt.Before.Equal(want) {
-		t.Errorf("cursor = %v, want %v", *r.gotOpt.Before, want)
+	if r.gotOpt.Offset != 0 {
+		t.Errorf("offset reaching the store = %d, want 0", r.gotOpt.Offset)
 	}
 }
 
-// The cursor is opaque to the caller, so a mangled or stale one falls back to
-// the newest rows instead of erroring or reaching the database.
-func TestListRelationsIgnoresAnUnparseableCursor(t *testing.T) {
-	for _, cursor := range []string{"2026-08-04 12:00:05.5", "not-a-time", "0"} {
-		t.Run(cursor, func(t *testing.T) {
-			r := &fakeResumeStore{relations: relationsAt(time.Now())}
-			s := NewResume(r, fakeAppStore{}, nil)
-
-			if _, _, err := s.ListRelations(context.Background(), "com.yoku.apen", cursor, 20); err != nil {
-				t.Fatalf("ListRelations: %v", err)
-			}
-			if r.gotOpt.Before != nil {
-				t.Errorf("cursor = %v, want the query left unbounded", *r.gotOpt.Before)
-			}
-		})
-	}
-}
-
-// A negative count used to panic on relations[count-1]. apen clamps it, but
-// three other repos consume this SDK.
+// A non-positive count would reach SQL as LIMIT 0 or a negative LIMIT.
 func TestListRelationsNonPositiveCountSkipsTheStore(t *testing.T) {
 	for _, count := range []int{0, -1, -20} {
 		t.Run(strconv.Itoa(count), func(t *testing.T) {
 			r := &fakeResumeStore{relations: relationsAt(time.Now(), time.Now())}
 			s := NewResume(r, fakeAppStore{}, nil)
 
-			got, next, err := s.ListRelations(context.Background(), "com.yoku.apen", "cursor", count)
+			got, err := s.ListRelations(context.Background(), "com.yoku.apen", 0, count)
 			if err != nil {
 				t.Fatalf("ListRelations: %v", err)
 			}
 			if len(got) != 0 {
 				t.Errorf("returned %d relations, want none", len(got))
-			}
-			if next != "cursor" {
-				t.Errorf("next = %q, want the cursor handed in", next)
 			}
 			if r.gotAppID != "" {
 				t.Error("store was queried for a non-positive page")

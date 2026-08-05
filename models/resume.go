@@ -254,7 +254,7 @@ type ListRelationOption struct {
 	After   *time.Time
 	ChatIDs []string
 	PostIDs []string
-	Before  *time.Time
+	Offset  int
 	Count   int
 }
 type ListRelationOptionFunc func(*ListRelationOption) error
@@ -280,14 +280,15 @@ func ByPostIDs(postIDs []string) ListRelationOptionFunc {
 	}
 }
 
-// Paginate takes the newest count relations older than before (a zero time
-// starts from the newest). Ordering rides along: a LIMIT without one is
-// arbitrary.
-func Paginate(before time.Time, count int) ListRelationOptionFunc {
+// Paginate takes count relations starting offset rows into the newest-first
+// order. Ordering rides along: a LIMIT without one is arbitrary. A negative
+// offset is clamped here rather than at the query, which Postgres rejects.
+func Paginate(offset, count int) ListRelationOptionFunc {
 	return func(opt *ListRelationOption) error {
-		if !before.IsZero() {
-			opt.Before = &before
+		if offset < 0 {
+			offset = 0
 		}
+		opt.Offset = offset
 		opt.Count = count
 		return nil
 	}

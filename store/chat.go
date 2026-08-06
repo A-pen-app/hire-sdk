@@ -88,17 +88,17 @@ func (s *chatStore) Read(ctx context.Context, userID, chatID string) error {
 	}
 
 	// step 2: update unread count in sender chat thread
+	//
+	// hiring DB has no user-level counter to roll up into (see SetHidden/SetCleared),
+	// so unlike megaphone's Read there is no step 3 here — zeroing this row is the
+	// whole story.
 	query = `
 	UPDATE public.chat_thread
 	SET unread_count=0
 	WHERE chat_id=? AND sender_id=?
-	RETURNING (SELECT unread_count FROM public.chat_thread
-		WHERE chat_id=? AND sender_id=?
-	)
 	`
 	query = s.db.Rebind(query)
-	unreadCountInChat := 0
-	if err := tx.QueryRow(query, chatID, userID, chatID, userID).Scan(&unreadCountInChat); err != nil {
+	if _, err := tx.Exec(query, chatID, userID); err != nil {
 		logging.Errorw(ctx, "update unread_count failed", "err", err, "chatID", chatID, "userID", userID)
 		return err
 	}
@@ -134,6 +134,10 @@ func (s *chatStore) Annotate(ctx context.Context, chatID, userID string, status 
 //
 // Un-archiving only clears the flag. It does not restore an unread count, because the
 // messages that produced it have been marked read.
+//
+// This does not roll the count up into anything higher — the hiring DB has no
+// user-level counter (no public.user table), and neither does Read. The hiring
+// badge is computed client-side, by summing unread_count across GET /hire/chats.
 func (s *chatStore) SetHidden(ctx context.Context, chatID, userID string, hidden bool) error {
 	query := `
 	UPDATE public.chat_thread
@@ -163,6 +167,9 @@ func (s *chatStore) SetHidden(ctx context.Context, chatID, userID string, hidden
 //
 // Calling it again on a room that has since received messages moves the cutoff forward,
 // which is what makes a second delete clear the newer messages too.
+//
+// Same as SetHidden: there is no user-level counter to roll this into. The hiring
+// badge is the client summing unread_count across GET /hire/chats.
 func (s *chatStore) SetCleared(ctx context.Context, chatID, userID string) error {
 	query := `
 	UPDATE public.chat_thread

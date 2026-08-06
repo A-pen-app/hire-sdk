@@ -77,7 +77,7 @@ func newFakeChatStore() *fakeChatStore {
 	return &fakeChatStore{
 		chats:   map[string]*fakeChat{},
 		threads: map[string]*fakeThread{},
-		now:     time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC),
+		now:     time.Now(),
 	}
 }
 

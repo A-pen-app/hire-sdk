@@ -608,6 +608,61 @@ func TestPerMessageDeleteStacksWithTheRoomCutoff(t *testing.T) {
 	t.Skip("hire-sdk has no per-message delete writer (G4)")
 }
 
+// CHAT-314: a reply that quotes a message from before the viewer's delete cutoff
+// still renders, but its quoted preview is unavailable. Deleting a room clears the
+// conversation, so letting a quote leak the pre-cutoff content back in would break
+// that promise — see docs/chat_visibility.md's R2 note on reply-quote previews.
+func TestReplyPreviewRespectsTheDeleteCutoff(t *testing.T) {
+	svc, c := setupRoom(t, 3)
+	ctx := context.Background()
+
+	quoted := c.messages[0] // oldest of the three seeded messages
+
+	// A deletes the room: everything seeded so far is now before A's cutoff.
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+
+	// B replies, quoting a message from before A's cutoff.
+	replyID, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("quoting the old one"), nil, &quoted.ID, nil)
+	if err != nil {
+		t.Fatalf("AddMessage: %v", err)
+	}
+
+	msgs, _, err := svc.GetChatMessages(ctx, testBundleID, userA, room, "", 100)
+	if err != nil {
+		t.Fatalf("GetChatMessages(A): %v", err)
+	}
+	var reply *models.Message
+	for _, m := range msgs {
+		if m.ID == replyID {
+			reply = m
+		}
+	}
+	if reply == nil {
+		t.Fatalf("the reply itself is missing from A's list — it was sent after A's cutoff and should render normally")
+	}
+	if reply.ReplyTo == nil {
+		t.Fatalf("expected ReplyTo to be populated")
+	}
+	if reply.ReplyTo.Status != models.Unavailable {
+		t.Errorf("A's ReplyTo.Status = %v, want Unavailable — the quoted message is before A's delete cutoff, and Status is what clients read to render \"cannot load the original message\"", reply.ReplyTo.Status)
+	}
+
+	// B's own cutoff never moved, so B still sees the full quoted content.
+	bMsgs, _, err := svc.GetChatMessages(ctx, testBundleID, userB, room, "", 100)
+	if err != nil {
+		t.Fatalf("GetChatMessages(B): %v", err)
+	}
+	for _, m := range bMsgs {
+		if m.ID == replyID {
+			if m.ReplyTo == nil || m.ReplyTo.Status != models.Normal {
+				t.Errorf("B's copy of the reply should still show the full quoted content, got status %v", m.ReplyTo.Status)
+			}
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Scenario 12 — megaphone only
 // ---------------------------------------------------------------------------

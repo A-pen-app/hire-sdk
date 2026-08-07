@@ -139,7 +139,7 @@ models.ByChatPostID(postID)
 
 // Search the applicant's real_name -- resume snapshot or business card, either
 // counts. Blank input is dropped rather than matching everything.
-models.ByChatApplicantName(keyword)
+models.ByChatRealName(keyword)
 ```
 
 **Chat Counts per Post**:
@@ -151,14 +151,14 @@ counts, err := chatStore.CountByPostIDs(ctx, appID, userID, postIDs)
 **Resume Relation Options and Counts**:
 ```go
 // Search the applicant's real_name on the resume snapshot
-models.ByApplicantName(keyword)
+models.ByRealName(keyword)
 
 // Only relations the recruiter has not opened yet
 models.UnreadOnly()
 
 // Counts what ListRelations would return without Paginate -- same options, same
 // WHERE, so the total always agrees with what can be paged through.
-total, err := resumeStore.CountRelations(ctx, appID, models.ByPostIDs(ids), models.ByApplicantName(kw))
+total, err := resumeStore.CountRelations(ctx, appID, models.ByPostIDs(ids), models.ByRealName(kw))
 unread, err := resumeStore.CountRelations(ctx, appID, models.ByPostIDs(ids), models.UnreadOnly())
 ```
 

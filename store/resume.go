@@ -456,12 +456,12 @@ func relationWhere(appID string, opt models.ListRelationOption) (string, []inter
 	if opt.UnreadOnly {
 		where += ` AND is_read = false`
 	}
-	if opt.ApplicantName != nil {
+	if opt.RealName != nil {
 		where += ` AND EXISTS (
 			SELECT 1 FROM public.resume_snapshot RS
 			WHERE RS.id = resume_relation.snapshot_id
 			  AND RS.content->>'real_name' ILIKE ?)`
-		args = append(args, "%"+*opt.ApplicantName+"%")
+		args = append(args, "%"+*opt.RealName+"%")
 	}
 	return where, args
 }

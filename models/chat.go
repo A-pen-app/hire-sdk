@@ -306,7 +306,7 @@ type GetOption struct {
 	UnreadOnly     bool
 	IsOfficialRole bool
 	PostID         *string
-	ApplicantName  *string
+	RealName  *string
 }
 type GetOptionFunc func(*GetOption) error
 
@@ -339,17 +339,17 @@ func ByChatPostID(postID string) GetOptionFunc {
 	}
 }
 
-// ByChatApplicantName matches the real_name on the applicant's resume snapshot or
+// ByChatRealName matches the real_name on the applicant's resume snapshot or
 // business card snapshot, case-insensitively, anywhere in the string. Either one
 // counts: the two carry the same person's name, so matching both can only widen
 // the search onto the right chat, never onto a wrong one. Blank or whitespace-only
 // input is dropped rather than matching everything.
 //
-// 名字帶 Chat 是為了跟 resume.go 的 ByApplicantName 區分，同 package 不能重名。
-func ByChatApplicantName(name string) GetOptionFunc {
+// 名字帶 Chat 是為了跟 resume.go 的 ByRealName 區分，同 package 不能重名。
+func ByChatRealName(name string) GetOptionFunc {
 	return func(opt *GetOption) error {
 		if trimmed := strings.TrimSpace(name); trimmed != "" {
-			opt.ApplicantName = &trimmed
+			opt.RealName = &trimmed
 		}
 		return nil
 	}

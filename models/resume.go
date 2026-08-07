@@ -257,7 +257,7 @@ type ListRelationOption struct {
 	PostIDs       []string
 	Offset        int
 	Count         int
-	ApplicantName *string
+	RealName *string
 	UnreadOnly    bool
 }
 type ListRelationOptionFunc func(*ListRelationOption) error
@@ -283,13 +283,13 @@ func ByPostIDs(postIDs []string) ListRelationOptionFunc {
 	}
 }
 
-// ByApplicantName matches the real_name on the applicant's resume snapshot,
+// ByRealName matches the real_name on the applicant's resume snapshot,
 // case-insensitively, anywhere in the string. Blank or whitespace-only input is
 // dropped rather than matching everything.
-func ByApplicantName(name string) ListRelationOptionFunc {
+func ByRealName(name string) ListRelationOptionFunc {
 	return func(opt *ListRelationOption) error {
 		if trimmed := strings.TrimSpace(name); trimmed != "" {
-			opt.ApplicantName = &trimmed
+			opt.RealName = &trimmed
 		}
 		return nil
 	}

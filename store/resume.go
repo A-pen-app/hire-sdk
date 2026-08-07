@@ -459,7 +459,7 @@ func relationConditions(appID string, opt models.ListRelationOption) ([]string, 
 			SELECT 1 FROM public.resume_snapshot RS
 			WHERE RS.id = resume_relation.snapshot_id
 			  AND RS.content->>'real_name' ILIKE ?)`)
-		values = append(values, "%"+*opt.RealName+"%")
+		values = append(values, containsPattern(*opt.RealName))
 	}
 	return conditions, values
 }

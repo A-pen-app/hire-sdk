@@ -208,7 +208,8 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 				SELECT 1 FROM public.business_card_snapshot BS
 				WHERE BS.id=C.business_card_snapshot_id AND BS.content->>'real_name' ILIKE ?)
 		)`)
-		values = append(values, "%"+*realName+"%", "%"+*realName+"%")
+		pattern := containsPattern(*realName)
+		values = append(values, pattern, pattern)
 	}
 
 	query = query + strings.Join(conditions, " AND ") + " ORDER BY CT.is_pinned DESC, C.updated_at DESC LIMIT ?"

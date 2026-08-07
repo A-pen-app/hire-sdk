@@ -252,13 +252,13 @@ func ByPostID(postID string) GetRelationOptionFunc {
 }
 
 type ListRelationOption struct {
-	After         *time.Time
-	ChatIDs       []string
-	PostIDs       []string
-	Offset        int
-	Count         int
-	RealName *string
-	UnreadOnly    bool
+	After      *time.Time
+	ChatIDs    []string
+	PostIDs    []string
+	Offset     int
+	Count      int
+	RealName   *string
+	UnreadOnly bool
 }
 type ListRelationOptionFunc func(*ListRelationOption) error
 
@@ -283,10 +283,8 @@ func ByPostIDs(postIDs []string) ListRelationOptionFunc {
 	}
 }
 
-// ByRealName matches the real_name on the applicant's resume snapshot,
-// case-insensitively, anywhere in the string. Blank or whitespace-only input is
-// dropped rather than matching everything.
-func ByRealName(name string) ListRelationOptionFunc {
+// 只比履歷的 real_name——這份清單的來源是 resume_relation，沒投履歷的人不在裡面。
+func ByResumeRealName(name string) ListRelationOptionFunc {
 	return func(opt *ListRelationOption) error {
 		if trimmed := strings.TrimSpace(name); trimmed != "" {
 			opt.RealName = &trimmed

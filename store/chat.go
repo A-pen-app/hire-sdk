@@ -198,8 +198,7 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		values = append(values, *postID)
 	}
 	if realName != nil {
-		// EXISTS rather than joins: a join would have to be threaded into the FROM
-		// clause that every other branch shares.
+		// 用 EXISTS 而非 join：join 得改動每個分支共用的 FROM 子句。
 		conditions = append(conditions, `(
 			EXISTS (
 				SELECT 1 FROM public.resume_relation RR

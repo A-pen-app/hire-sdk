@@ -434,9 +434,7 @@ func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelatio
 	return &relation, nil
 }
 
-// relationConditions is shared by ListRelations and CountRelations so the two
-// cannot drift: a count built from different conditions than the list disagrees
-// with what the caller can actually page through.
+// ListRelations 與 CountRelations 共用，否則總數會跟實際翻得到的筆數對不上。
 func relationConditions(appID string, opt models.ListRelationOption) ([]string, []interface{}) {
 	conditions := []string{"app_id = ?"}
 	values := []interface{}{appID}

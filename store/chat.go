@@ -209,7 +209,8 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 	return chats, nil
 }
 
-// status 與 control_flag 的條件要跟 GetChats 的預設分支一致，否則數字會跟實際列得出來的對不上。
+// status 與 control_flag 的條件抄自 GetChats 非 official 的那條路徑。不一致的話，
+// 被封鎖或被管理員隱藏的聊天室會被算進來卻列不出來，選單數字就跟實際翻得到的對不上。
 func (s *chatStore) CountByPostIDs(ctx context.Context, appID, userID string, postIDs []string) (map[string]int, error) {
 	counts := map[string]int{}
 	if len(postIDs) == 0 {

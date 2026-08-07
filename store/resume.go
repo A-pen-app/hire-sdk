@@ -434,36 +434,36 @@ func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelatio
 	return &relation, nil
 }
 
-// relationWhere is shared by ListRelations and CountRelations so the two cannot
-// drift: a count built from different conditions than the list disagrees with
-// what the caller can actually page through.
-func relationWhere(appID string, opt models.ListRelationOption) (string, []interface{}) {
-	where := ` WHERE app_id = ?`
-	args := []interface{}{appID}
+// relationConditions is shared by ListRelations and CountRelations so the two
+// cannot drift: a count built from different conditions than the list disagrees
+// with what the caller can actually page through.
+func relationConditions(appID string, opt models.ListRelationOption) ([]string, []interface{}) {
+	conditions := []string{"app_id = ?"}
+	values := []interface{}{appID}
 
 	if opt.After != nil {
-		where += ` AND created_at >= ?`
-		args = append(args, *opt.After)
+		conditions = append(conditions, "created_at >= ?")
+		values = append(values, *opt.After)
 	}
 	if len(opt.ChatIDs) > 0 {
-		where += ` AND chat_id = ANY(?)`
-		args = append(args, pq.Array(opt.ChatIDs))
+		conditions = append(conditions, "chat_id = ANY(?)")
+		values = append(values, pq.Array(opt.ChatIDs))
 	}
 	if len(opt.PostIDs) > 0 {
-		where += ` AND post_id = ANY(?)`
-		args = append(args, pq.Array(opt.PostIDs))
+		conditions = append(conditions, "post_id = ANY(?)")
+		values = append(values, pq.Array(opt.PostIDs))
 	}
 	if opt.UnreadOnly {
-		where += ` AND is_read = false`
+		conditions = append(conditions, "is_read = false")
 	}
 	if opt.RealName != nil {
-		where += ` AND EXISTS (
+		conditions = append(conditions, `EXISTS (
 			SELECT 1 FROM public.resume_snapshot RS
 			WHERE RS.id = resume_relation.snapshot_id
-			  AND RS.content->>'real_name' ILIKE ?)`
-		args = append(args, "%"+*opt.RealName+"%")
+			  AND RS.content->>'real_name' ILIKE ?)`)
+		values = append(values, "%"+*opt.RealName+"%")
 	}
-	return where, args
+	return conditions, values
 }
 
 // CountRelations counts what ListRelations would return without Paginate.
@@ -476,11 +476,14 @@ func (s *resumeStore) CountRelations(ctx context.Context, appID string, opts ...
 		}
 	}
 
-	where, args := relationWhere(appID, opt)
-	query := s.db.Rebind(`SELECT COUNT(*) FROM public.resume_relation` + where)
+	conditions, values := relationConditions(appID, opt)
+	query := s.db.Rebind(`
+	SELECT COUNT(*)
+	FROM public.resume_relation
+	WHERE ` + strings.Join(conditions, " AND "))
 
 	var count int
-	if err := s.db.GetContext(ctx, &count, query, args...); err != nil {
+	if err := s.db.GetContext(ctx, &count, query, values...); err != nil {
 		logging.Errorw(ctx, "failed to count resume relations", "err", err, "appID", appID)
 		return 0, err
 	}
@@ -496,7 +499,7 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...m
 		}
 	}
 
-	where, args := relationWhere(appID, opt)
+	conditions, values := relationConditions(appID, opt)
 	query := `
 	SELECT
 		id,
@@ -509,17 +512,18 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...m
 		created_at,
 		updated_at,
 		status
-	FROM public.resume_relation` + where
+	FROM public.resume_relation
+	WHERE ` + strings.Join(conditions, " AND ")
 
 	if opt.Count > 0 {
 		query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
-		args = append(args, opt.Count, opt.Offset)
+		values = append(values, opt.Count, opt.Offset)
 	}
 
 	query = s.db.Rebind(query)
 
 	var relations []*models.ResumeRelation
-	err := s.db.Select(&relations, query, args...)
+	err := s.db.Select(&relations, query, values...)
 	if err != nil {
 		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", appID, "opts", opts)
 		return nil, err

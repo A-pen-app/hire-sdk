@@ -434,6 +434,59 @@ func (s *resumeStore) GetRelation(ctx context.Context, opts ...models.GetRelatio
 	return &relation, nil
 }
 
+// relationWhere is shared by ListRelations and CountRelations so the two cannot
+// drift: a count built from different conditions than the list disagrees with
+// what the caller can actually page through.
+func relationWhere(appID string, opt models.ListRelationOption) (string, []interface{}) {
+	where := ` WHERE app_id = ?`
+	args := []interface{}{appID}
+
+	if opt.After != nil {
+		where += ` AND created_at >= ?`
+		args = append(args, *opt.After)
+	}
+	if len(opt.ChatIDs) > 0 {
+		where += ` AND chat_id = ANY(?)`
+		args = append(args, pq.Array(opt.ChatIDs))
+	}
+	if len(opt.PostIDs) > 0 {
+		where += ` AND post_id = ANY(?)`
+		args = append(args, pq.Array(opt.PostIDs))
+	}
+	if opt.UnreadOnly {
+		where += ` AND is_read = false`
+	}
+	if opt.ApplicantName != nil {
+		where += ` AND EXISTS (
+			SELECT 1 FROM public.resume_snapshot RS
+			WHERE RS.id = resume_relation.snapshot_id
+			  AND RS.content->>'real_name' ILIKE ?)`
+		args = append(args, "%"+*opt.ApplicantName+"%")
+	}
+	return where, args
+}
+
+// CountRelations counts what ListRelations would return without Paginate.
+func (s *resumeStore) CountRelations(ctx context.Context, appID string, opts ...models.ListRelationOptionFunc) (int, error) {
+	opt := models.ListRelationOption{}
+	for _, f := range opts {
+		if err := f(&opt); err != nil {
+			logging.Errorw(ctx, "failed to apply list relation option", "err", err)
+			return 0, err
+		}
+	}
+
+	where, args := relationWhere(appID, opt)
+	query := s.db.Rebind(`SELECT COUNT(*) FROM public.resume_relation` + where)
+
+	var count int
+	if err := s.db.GetContext(ctx, &count, query, args...); err != nil {
+		logging.Errorw(ctx, "failed to count resume relations", "err", err, "appID", appID)
+		return 0, err
+	}
+	return count, nil
+}
+
 func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, error) {
 	opt := models.ListRelationOption{}
 	for _, f := range opts {
@@ -443,6 +496,7 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...m
 		}
 	}
 
+	where, args := relationWhere(appID, opt)
 	query := `
 	SELECT
 		id,
@@ -455,26 +509,7 @@ func (s *resumeStore) ListRelations(ctx context.Context, appID string, opts ...m
 		created_at,
 		updated_at,
 		status
-	FROM public.resume_relation
-	WHERE app_id = ?`
-
-	var args []interface{}
-	args = append(args, appID)
-
-	if opt.After != nil {
-		query += ` AND created_at >= ?`
-		args = append(args, *opt.After)
-	}
-
-	if len(opt.ChatIDs) > 0 {
-		query += ` AND chat_id = ANY(?)`
-		args = append(args, pq.Array(opt.ChatIDs))
-	}
-
-	if len(opt.PostIDs) > 0 {
-		query += ` AND post_id = ANY(?)`
-		args = append(args, pq.Array(opt.PostIDs))
-	}
+	FROM public.resume_relation` + where
 
 	if opt.Count > 0 {
 		query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`

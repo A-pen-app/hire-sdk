@@ -18,6 +18,7 @@ type Resume interface {
 	CreateRelation(ctx context.Context, appID, userID string, snapshotID string, chatID string, postID string, status models.ResumeStatus) (*models.ResumeRelation, error)
 	GetRelation(ctx context.Context, opts ...models.GetRelationOptionFunc) (*models.ResumeRelation, error)
 	ListRelations(ctx context.Context, appID string, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, error)
+	CountRelations(ctx context.Context, appID string, opts ...models.ListRelationOptionFunc) (int, error)
 	Read(ctx context.Context, snapshotID string) error
 	UpdateRelationStatus(ctx context.Context, snapshotID string, status models.ResumeStatus) error
 	UpdateRelationListStatus(ctx context.Context, postIDs []string, status models.ResumeStatus) error
@@ -26,7 +27,7 @@ type Resume interface {
 
 type Chat interface {
 	Get(ctx context.Context, appID, chatID, userID string) (*models.ChatRoom, error)
-	GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, includeNoMessage bool, postID *string) ([]*models.ChatRoom, error)
+	GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, includeNoMessage bool, postID *string, applicantName *string) ([]*models.ChatRoom, error)
 	CountByPostIDs(ctx context.Context, appID, userID string, postIDs []string) (map[string]int, error)
 	GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error)
 	Read(ctx context.Context, userID, chatID string) error

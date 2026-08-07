@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -251,11 +252,13 @@ func ByPostID(postID string) GetRelationOptionFunc {
 }
 
 type ListRelationOption struct {
-	After   *time.Time
-	ChatIDs []string
-	PostIDs []string
-	Offset  int
-	Count   int
+	After         *time.Time
+	ChatIDs       []string
+	PostIDs       []string
+	Offset        int
+	Count         int
+	ApplicantName *string
+	UnreadOnly    bool
 }
 type ListRelationOptionFunc func(*ListRelationOption) error
 
@@ -276,6 +279,25 @@ func ByChatIDs(chatIDs []string) ListRelationOptionFunc {
 func ByPostIDs(postIDs []string) ListRelationOptionFunc {
 	return func(opt *ListRelationOption) error {
 		opt.PostIDs = postIDs
+		return nil
+	}
+}
+
+// ByApplicantName matches the real_name on the applicant's resume snapshot,
+// case-insensitively, anywhere in the string. Blank or whitespace-only input is
+// dropped rather than matching everything.
+func ByApplicantName(name string) ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			opt.ApplicantName = &trimmed
+		}
+		return nil
+	}
+}
+
+func UnreadOnly() ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		opt.UnreadOnly = true
 		return nil
 	}
 }

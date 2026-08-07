@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	feedmodel "github.com/A-pen-app/feed-sdk/model"
@@ -305,6 +306,7 @@ type GetOption struct {
 	UnreadOnly     bool
 	IsOfficialRole bool
 	PostID         *string
+	ApplicantName  *string
 }
 type GetOptionFunc func(*GetOption) error
 
@@ -333,6 +335,22 @@ func IsOfficialRole() GetOptionFunc {
 func ByChatPostID(postID string) GetOptionFunc {
 	return func(opt *GetOption) error {
 		opt.PostID = &postID
+		return nil
+	}
+}
+
+// ByChatApplicantName matches the real_name on the applicant's resume snapshot or
+// business card snapshot, case-insensitively, anywhere in the string. Either one
+// counts: the two carry the same person's name, so matching both can only widen
+// the search onto the right chat, never onto a wrong one. Blank or whitespace-only
+// input is dropped rather than matching everything.
+//
+// 名字帶 Chat 是為了跟 resume.go 的 ByApplicantName 區分，同 package 不能重名。
+func ByChatApplicantName(name string) GetOptionFunc {
+	return func(opt *GetOption) error {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			opt.ApplicantName = &trimmed
+		}
 		return nil
 	}
 }

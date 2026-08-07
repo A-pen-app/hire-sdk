@@ -137,7 +137,7 @@ func (s *chatStore) Pin(ctx context.Context, chatID, userID string, isPinned boo
 	return nil
 }
 
-func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, isOfficialRole bool, postID *string) ([]*models.ChatRoom, error) {
+func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, isOfficialRole bool, postID *string, applicantName *string) ([]*models.ChatRoom, error) {
 	chats := []*models.ChatRoom{}
 	if next == "" {
 		// +2 seconds to prevent the last chat is created at almost the same time with getting chats
@@ -196,6 +196,20 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 	if postID != nil {
 		conditions = append(conditions, "C.post_id=?")
 		values = append(values, *postID)
+	}
+	if applicantName != nil {
+		// EXISTS rather than joins: a join would have to be threaded into the FROM
+		// clause that every other branch shares.
+		conditions = append(conditions, `(
+			EXISTS (
+				SELECT 1 FROM public.resume_relation RR
+				JOIN public.resume_snapshot RS ON RS.id=RR.snapshot_id
+				WHERE RR.chat_id=C.id AND RS.content->>'real_name' ILIKE ?)
+			OR EXISTS (
+				SELECT 1 FROM public.business_card_snapshot BS
+				WHERE BS.id=C.business_card_snapshot_id AND BS.content->>'real_name' ILIKE ?)
+		)`)
+		values = append(values, "%"+*applicantName+"%", "%"+*applicantName+"%")
 	}
 
 	query = query + strings.Join(conditions, " AND ") + " ORDER BY CT.is_pinned DESC, C.updated_at DESC LIMIT ?"

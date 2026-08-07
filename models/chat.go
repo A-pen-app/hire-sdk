@@ -224,6 +224,8 @@ type ChatRoom struct {
 	Status      ChatAnnotation  `json:"status" db:"status"`
 	ControlFlag ChatControlFlag `json:"-" db:"control_flag"`
 	IsPinned    bool            `json:"is_pinned" db:"is_pinned"`
+	// 這一側自己取的名稱，對方看不到。nil 表示沒設過，是否退回 Receiver.Name 由呼叫端決定。
+	Name *string `json:"name" db:"name"`
 
 	//chat
 	AppID                  string                `json:"-" db:"app_id"`
@@ -302,6 +304,7 @@ type GetOption struct {
 	Status         ChatAnnotation
 	UnreadOnly     bool
 	IsOfficialRole bool
+	PostID         *string
 }
 type GetOptionFunc func(*GetOption) error
 
@@ -322,6 +325,14 @@ func ByStatus(status ChatAnnotation, unreadOnly bool) GetOptionFunc {
 func IsOfficialRole() GetOptionFunc {
 	return func(opt *GetOption) error {
 		opt.IsOfficialRole = true
+		return nil
+	}
+}
+
+// 帶 Chat 是為了跟 resume.go 的 ByPostID 區分，同 package 不能重名。
+func ByChatPostID(postID string) GetOptionFunc {
+	return func(opt *GetOption) error {
+		opt.PostID = &postID
 		return nil
 	}
 }

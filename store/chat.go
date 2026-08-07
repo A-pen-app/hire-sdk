@@ -42,7 +42,8 @@ func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*mod
 		CT.is_pinned,
 		C.business_card_snapshot_id,
 		C.access_status,
-		CT.hire_contact
+		CT.hire_contact,
+		CT.name
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
@@ -136,7 +137,7 @@ func (s *chatStore) Pin(ctx context.Context, chatID, userID string, isPinned boo
 	return nil
 }
 
-func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, isOfficialRole bool) ([]*models.ChatRoom, error) {
+func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, isOfficialRole bool, postID *string) ([]*models.ChatRoom, error) {
 	chats := []*models.ChatRoom{}
 	if next == "" {
 		// +2 seconds to prevent the last chat is created at almost the same time with getting chats
@@ -159,7 +160,8 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		CT.is_pinned,
 		C.business_card_snapshot_id,
 		C.access_status,
-		CT.hire_contact
+		CT.hire_contact,
+		CT.name
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
@@ -191,6 +193,10 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 	if unreadOnly {
 		conditions = append(conditions, "CT.unread_count>0")
 	}
+	if postID != nil {
+		conditions = append(conditions, "C.post_id=?")
+		values = append(values, *postID)
+	}
 
 	query = query + strings.Join(conditions, " AND ") + " ORDER BY CT.is_pinned DESC, C.updated_at DESC LIMIT ?"
 	values = append(values, count)
@@ -201,6 +207,43 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		return nil, err
 	}
 	return chats, nil
+}
+
+// 可見性條件跟 GetChats 對齊，只差不帶 cursor（總數本來就要跨頁算）。
+// 改 GetChats 的條件時這裡要跟著改，否則數字會跟實際列得出來的對不上。
+func (s *chatStore) CountByPostIDs(ctx context.Context, appID, userID string, postIDs []string) (map[string]int, error) {
+	counts := map[string]int{}
+	if len(postIDs) == 0 {
+		return counts, nil
+	}
+
+	query := `
+	SELECT
+		C.post_id,
+		COUNT(*) AS count
+	FROM public.chat_thread AS CT
+	JOIN public.chat AS C
+	ON CT.chat_id=C.id
+	WHERE C.app_id=? AND CT.sender_id=? AND C.post_id=ANY(?)
+		AND CT.status!=? AND CT.control_flag IN (?, ?)
+	GROUP BY C.post_id
+	`
+	query = s.db.Rebind(query)
+
+	rows := []struct {
+		PostID string `db:"post_id"`
+		Count  int    `db:"count"`
+	}{}
+	if err := s.db.SelectContext(ctx, &rows, query, appID, userID, pq.Array(postIDs),
+		models.Deleted, models.Pass, models.NeverGotMessages); err != nil {
+		logging.Errorw(ctx, "count chats by post ids failed", "err", err, "appID", appID, "userID", userID)
+		return nil, err
+	}
+
+	for _, r := range rows {
+		counts[r.PostID] = r.Count
+	}
+	return counts, nil
 }
 
 func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error) {
@@ -740,6 +783,20 @@ func (s *chatStore) UpdateHireContact(ctx context.Context, chatID string, userID
 	query = s.db.Rebind(query)
 	if _, err := s.db.Exec(query, contact, chatID, userID); err != nil {
 		logging.Errorw(ctx, "update hire contact failed", "err", err, "chatID", chatID, "userID", userID)
+		return err
+	}
+
+	return nil
+}
+
+func (s *chatStore) UpdateName(ctx context.Context, chatID string, userID string, name *string) error {
+	query := `
+	UPDATE public.chat_thread SET name=?
+	WHERE chat_id=? AND sender_id=?
+	`
+	query = s.db.Rebind(query)
+	if _, err := s.db.ExecContext(ctx, query, name, chatID, userID); err != nil {
+		logging.Errorw(ctx, "update chat name failed", "err", err, "chatID", chatID, "userID", userID)
 		return err
 	}
 

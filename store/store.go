@@ -26,7 +26,8 @@ type Resume interface {
 
 type Chat interface {
 	Get(ctx context.Context, appID, chatID, userID string) (*models.ChatRoom, error)
-	GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, includeNoMessage bool) ([]*models.ChatRoom, error)
+	GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, includeNoMessage bool, postID *string) ([]*models.ChatRoom, error)
+	CountByPostIDs(ctx context.Context, appID, userID string, postIDs []string) (map[string]int, error)
 	GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error)
 	Read(ctx context.Context, userID, chatID string) error
 	GetMessage(ctx context.Context, messageID string) (*models.Message, error)
@@ -39,6 +40,7 @@ type Chat interface {
 	Annotate(ctx context.Context, chatID, userID string, status models.ChatAnnotation) error
 	Pin(ctx context.Context, chatID, userID string, isPinned bool) error
 	UpdateHireContact(ctx context.Context, chatID string, userID string, contact *models.HireContact) error
+	UpdateName(ctx context.Context, chatID string, userID string, name *string) error
 	UpdateBusinessCardSnapshotID(ctx context.Context, chatID, snapshotID string) error
 	UpdateAccessStatus(ctx context.Context, chatID string, status models.AccessStatus) error
 	GetUserChattingPostIDs(ctx context.Context, appID, userID string) ([]string, error)

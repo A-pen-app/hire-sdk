@@ -133,6 +133,22 @@ models.ByStatus(models.Todo, false)
 
 // Filter official role chats
 models.IsOfficialRole()
+
+// Filter to one recruit post
+models.ByChatPostID(postID)
+```
+
+**Chat Counts per Post**:
+```go
+// Chats per post for the caller's side. Posts with none are absent from the map.
+counts, err := chatStore.CountByPostIDs(ctx, appID, userID, postIDs)
+```
+
+**Per-participant Chat Name**:
+```go
+// Each side keeps its own name for a chat; the other side never sees it.
+// Pass nil to clear. Read it back from ChatRoom.Name.
+err := chatStore.UpdateName(ctx, chatID, userID, &name)
 ```
 
 **Sending Messages**:

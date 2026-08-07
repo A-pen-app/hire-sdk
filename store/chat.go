@@ -794,7 +794,7 @@ func (s *chatStore) UpdateName(ctx context.Context, chatID string, userID string
 	WHERE chat_id=? AND sender_id=?
 	`
 	query = s.db.Rebind(query)
-	if _, err := s.db.Exec(query, name, chatID, userID); err != nil {
+	if _, err := s.db.ExecContext(ctx, query, name, chatID, userID); err != nil {
 		logging.Errorw(ctx, "update chat name failed", "err", err, "chatID", chatID, "userID", userID)
 		return err
 	}

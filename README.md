@@ -17,6 +17,11 @@ go get github.com/A-pen-app/hire-sdk
 - **User Agreements**: Manage user consent and agreement versions
 - **Subscription Management**: Handle user subscription status and expiration
 
+> **Working on chat?** Read [docs/chat_visibility.md](docs/chat_visibility.md) first. It
+> defines the archive / delete visibility rules shared by all three chat implementations
+> (`hire-sdk`, `megaphone`, `{apen,nurse,phar}-api`), documents the known gaps in this
+> SDK's chat code, and describes the tag-and-bump release flow this repo requires.
+
 ## Core Modules
 
 ### Resume Service

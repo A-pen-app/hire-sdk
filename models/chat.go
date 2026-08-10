@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	feedmodel "github.com/A-pen-app/feed-sdk/model"
@@ -305,6 +306,7 @@ type GetOption struct {
 	UnreadOnly     bool
 	IsOfficialRole bool
 	PostID         *string
+	RealName       *string
 }
 type GetOptionFunc func(*GetOption) error
 
@@ -333,6 +335,17 @@ func IsOfficialRole() GetOptionFunc {
 func ByChatPostID(postID string) GetOptionFunc {
 	return func(opt *GetOption) error {
 		opt.PostID = &postID
+		return nil
+	}
+}
+
+// 比履歷或名片的 real_name，命中任一即可。空白關鍵字丟掉，不然清空搜尋框會變成
+// 符合全部。
+func ByRealName(name string) GetOptionFunc {
+	return func(opt *GetOption) error {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			opt.RealName = &trimmed
+		}
 		return nil
 	}
 }

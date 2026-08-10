@@ -136,12 +136,29 @@ models.IsOfficialRole()
 
 // Filter to one recruit post
 models.ByChatPostID(postID)
+
+// Search the applicant's real_name -- resume snapshot or business card, either
+// counts. Blank input is dropped rather than matching everything.
+models.ByRealName(keyword)
 ```
 
 **Chat Counts per Post**:
 ```go
 // Chats per post for the caller's side. Posts with none are absent from the map.
 counts, err := chatStore.CountByPostIDs(ctx, appID, userID, postIDs)
+```
+
+**Resume Relation Options and Counts**:
+```go
+// Search the real_name on the resume snapshot only
+models.ByResumeRealName(keyword)
+
+// Only relations the recruiter has not opened yet
+models.UnreadOnly()
+
+// Same options as ListRelations, so the total always agrees with the list.
+total, err := resumeStore.CountRelations(ctx, appID, models.ByPostIDs(ids), models.ByResumeRealName(kw))
+unread, err := resumeStore.CountRelations(ctx, appID, models.ByPostIDs(ids), models.UnreadOnly())
 ```
 
 **Per-participant Chat Name**:

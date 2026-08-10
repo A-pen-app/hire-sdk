@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -251,11 +252,13 @@ func ByPostID(postID string) GetRelationOptionFunc {
 }
 
 type ListRelationOption struct {
-	After   *time.Time
-	ChatIDs []string
-	PostIDs []string
-	Offset  int
-	Count   int
+	After      *time.Time
+	ChatIDs    []string
+	PostIDs    []string
+	Offset     int
+	Count      int
+	RealName   *string
+	UnreadOnly bool
 }
 type ListRelationOptionFunc func(*ListRelationOption) error
 
@@ -276,6 +279,23 @@ func ByChatIDs(chatIDs []string) ListRelationOptionFunc {
 func ByPostIDs(postIDs []string) ListRelationOptionFunc {
 	return func(opt *ListRelationOption) error {
 		opt.PostIDs = postIDs
+		return nil
+	}
+}
+
+// 只比履歷的 real_name——這份清單的來源是 resume_relation，沒投履歷的人不在裡面。
+func ByResumeRealName(name string) ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			opt.RealName = &trimmed
+		}
+		return nil
+	}
+}
+
+func UnreadOnly() ListRelationOptionFunc {
+	return func(opt *ListRelationOption) error {
+		opt.UnreadOnly = true
 		return nil
 	}
 }

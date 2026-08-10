@@ -443,11 +443,14 @@ func relationConditions(appID string, opt models.ListRelationOption) ([]string, 
 		conditions = append(conditions, "created_at >= ?")
 		values = append(values, *opt.After)
 	}
-	if len(opt.ChatIDs) > 0 {
+	// nil（沒傳過這個 option）才是不篩。傳了空陣列表示「篩不到任何一筆」，
+	// 產生 ANY('{}')；用 len()>0 判斷的話，兩者都變成不篩，呼叫端一旦傳空
+	// 就會數到整個 app 的資料。
+	if opt.ChatIDs != nil {
 		conditions = append(conditions, "chat_id = ANY(?)")
 		values = append(values, pq.Array(opt.ChatIDs))
 	}
-	if len(opt.PostIDs) > 0 {
+	if opt.PostIDs != nil {
 		conditions = append(conditions, "post_id = ANY(?)")
 		values = append(values, pq.Array(opt.PostIDs))
 	}

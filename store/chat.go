@@ -150,6 +150,34 @@ func (s *chatStore) SetHidden(ctx context.Context, chatID, userID string, hidden
 	return nil
 }
 
+// SetCleared deletes a chat room for one user: it stamps the delete cutoff and
+// archives the room in the same statement (rules R1 and R2).
+//
+// Everything created at or before cleared_at stops being visible to this user, for
+// good — the cutoff is never reset by later messages. Messages themselves are not
+// touched, so the other participant keeps the full history.
+//
+// Deleting also drops the unread count to zero (rule R3), for the same reason
+// archiving does: the room leaves the list and the messages that produced the count are
+// gone from this user's view.
+//
+// Calling it again on a room that has since received messages moves the cutoff forward,
+// which is what makes a second delete clear the newer messages too.
+func (s *chatStore) SetCleared(ctx context.Context, chatID, userID string) error {
+	query := `
+	UPDATE public.chat_thread
+	SET cleared_at=now(), hidden_at=now(), unread_count=0
+	WHERE chat_id=? AND sender_id=?
+	`
+	query = s.db.Rebind(query)
+	if _, err := s.db.Exec(query, chatID, userID); err != nil {
+		logging.Errorw(ctx, "clear chat thread failed", "err", err, "chatID", chatID, "userID", userID)
+		return err
+	}
+
+	return nil
+}
+
 func (s *chatStore) Pin(ctx context.Context, chatID, userID string, isPinned bool) error {
 	query := `
 	UPDATE public.chat_thread
@@ -578,7 +606,9 @@ func (s *chatStore) GetMessage(ctx context.Context, messageID string) (*models.M
 	return &msg, nil
 }
 
-func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after time.Time) ([]*models.Message, error) {
+// GetNewMessages returns everything in a room created after a given point, with the
+// caller's delete cutoff applied on top (rule R2).
+func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after time.Time, clearedAt *time.Time) ([]*models.Message, error) {
 
 	query := `
 	SELECT
@@ -593,13 +623,19 @@ func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after tim
 		media_ids,
 		reference_id	
 	FROM public.message
-	WHERE chat_id=? AND created_at>?
-	ORDER BY created_at DESC
-	`
+	WHERE chat_id=? AND created_at>?`
 	values := []interface{}{
 		chatID,
 		after,
 	}
+	// Rule R2. Strictly greater: a message created exactly at the cutoff stays hidden.
+	if clearedAt != nil {
+		query += ` AND created_at>?`
+		values = append(values, *clearedAt)
+	}
+	query += `
+	ORDER BY created_at DESC
+	`
 	query = s.db.Rebind(query)
 	rows, err := s.db.Queryx(query, values...)
 	if err != nil {
@@ -632,7 +668,12 @@ func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after tim
 	return msgs, nil
 }
 
-func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string, count int) ([]*models.Message, error) {
+// GetMessages returns a page of a room's history, newest first.
+//
+// clearedAt is the caller's delete cutoff (rule R2). Filtering in SQL rather than after
+// the fact keeps the cursor arithmetic honest: a page of `count` rows is a page of rows
+// the caller can actually see.
+func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string, count int, clearedAt *time.Time) ([]*models.Message, error) {
 
 	if next == "" {
 		// +2 seconds to prevent the last message is created at almost the same time with getting messages
@@ -651,15 +692,21 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 		media_ids,
 		reference_id
 	FROM public.message
-	WHERE chat_id=? AND created_at<TO_TIMESTAMP(?)
-	ORDER BY created_at DESC
-	LIMIT ?
-	`
+	WHERE chat_id=? AND created_at<TO_TIMESTAMP(?)`
 	values := []interface{}{
 		chatID,
 		next,
-		count,
 	}
+	// Rule R2. Strictly greater: a message created exactly at the cutoff stays hidden.
+	if clearedAt != nil {
+		query += ` AND created_at>?`
+		values = append(values, *clearedAt)
+	}
+	query += `
+	ORDER BY created_at DESC
+	LIMIT ?
+	`
+	values = append(values, count)
 	query = s.db.Rebind(query)
 	rows, err := s.db.Queryx(query, values...)
 	if err != nil {

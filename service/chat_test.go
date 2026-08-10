@@ -317,47 +317,238 @@ func TestArchiveRequiresMembership(t *testing.T) {
 
 // CHAT-201 / CHAT-202
 func TestDeleteClearsMySideAndLeavesTheirs(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	svc, _ := setupRoom(t, 10)
+	ctx := context.Background()
+
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+
+	if got := listedRooms(t, svc, userA); got != 0 {
+		t.Errorf("A lists %d rooms after deleting, want 0", got)
+	}
+	if got := visibleMessages(t, svc, userA); got != 0 {
+		t.Errorf("A sees %d messages after deleting, want 0", got)
+	}
+	// The other side is untouched — no message row was modified, only A's cutoff.
+	if got := listedRooms(t, svc, userB); got != 1 {
+		t.Errorf("B lists %d rooms, want 1", got)
+	}
+	if got := visibleMessages(t, svc, userB); got != 10 {
+		t.Errorf("B sees %d messages, want 10", got)
+	}
 }
 
 // CHAT-203
 func TestNewMessageAfterDeleteShowsOnlyPostCutoffMessages(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	svc, c := setupRoom(t, 10)
+	ctx := context.Background()
+
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if _, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("m11"), nil, nil, nil); err != nil {
+		t.Fatalf("AddMessage: %v", err)
+	}
+
+	if got := listedRooms(t, svc, userA); got != 1 {
+		t.Errorf("A lists %d rooms after a new message, want 1", got)
+	}
+	if got := visibleMessages(t, svc, userA); got != 1 {
+		t.Errorf("A sees %d messages, want 1 — only the one sent after the cutoff", got)
+	}
+	if got := visibleMessages(t, svc, userB); got != 11 {
+		t.Errorf("B sees %d messages, want 11", got)
+	}
 }
 
 // CHAT-204
 func TestMyOwnMessageAfterDeleteIsVisibleToMe(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	svc, c := setupRoom(t, 10)
+	ctx := context.Background()
+
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if _, err := c.AddMessage(ctx, userA, room, userB, models.MsgText, textPtr("m11"), nil, nil, nil); err != nil {
+		t.Fatalf("AddMessage: %v", err)
+	}
+
+	if got := visibleMessages(t, svc, userA); got != 1 {
+		t.Errorf("A sees %d messages, want 1 — their own, sent after the cutoff", got)
+	}
+	if got := visibleMessages(t, svc, userB); got != 11 {
+		t.Errorf("B sees %d messages, want 11", got)
+	}
 }
 
 // CHAT-205
 func TestDeleteCutoffIsNeverReset(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	svc, c := setupRoom(t, 10)
+	ctx := context.Background()
+
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("after"), nil, nil, nil); err != nil {
+			t.Fatalf("AddMessage: %v", err)
+		}
+	}
+
+	if got := visibleMessages(t, svc, userA); got != 3 {
+		t.Errorf("A sees %d messages, want exactly 3 — the original 10 must never come back", got)
+	}
+	if got := visibleMessages(t, svc, userB); got != 13 {
+		t.Errorf("B sees %d messages, want 13", got)
+	}
 }
 
 // CHAT-206
 func TestDeleteMarksTheRoomAsRead(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	svc, c := setupRoom(t, 0)
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		if _, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("m"), nil, nil, nil); err != nil {
+			t.Fatalf("AddMessage: %v", err)
+		}
+	}
+	if got := unreadOf(t, c, userA); got != 3 {
+		t.Fatalf("precondition: A has %d unread, want 3", got)
+	}
+
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+
+	if got := unreadOf(t, c, userA); got != 0 {
+		t.Errorf("A has %d unread after deleting, want 0", got)
+	}
+	if got := unreadOf(t, c, userB); got != 0 {
+		t.Errorf("B has %d unread, want 0 — A deleting must not touch B", got)
+	}
 }
 
 // CHAT-207
 func TestLastMessagePreviewRespectsTheCutoff(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	svc, c := setupRoom(t, 10)
+	ctx := context.Background()
+
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if _, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("m11"), nil, nil, nil); err != nil {
+		t.Fatalf("AddMessage: %v", err)
+	}
+
+	chats, _, err := svc.GetChats(ctx, testBundleID, userA, "", 100)
+	if err != nil {
+		t.Fatalf("GetChats: %v", err)
+	}
+	if len(chats) != 1 {
+		t.Fatalf("A lists %d rooms, want 1", len(chats))
+	}
+	if chats[0].LastMessage == nil {
+		t.Fatal("A has no preview, want the message sent after the cutoff")
+	}
+	if got := *chats[0].LastMessage.Body; got != "m11" {
+		t.Errorf("preview is %q, want %q — never a message from before the cutoff", got, "m11")
+	}
 }
 
 // CHAT-208
 func TestDeletingTwiceMovesTheCutoffForward(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	svc, c := setupRoom(t, 10)
+	ctx := context.Background()
+
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear #1: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("after"), nil, nil, nil); err != nil {
+			t.Fatalf("AddMessage: %v", err)
+		}
+	}
+	if got := visibleMessages(t, svc, userA); got != 2 {
+		t.Fatalf("precondition: A sees %d messages, want 2", got)
+	}
+
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear #2: %v", err)
+	}
+
+	if got := visibleMessages(t, svc, userA); got != 0 {
+		t.Errorf("A sees %d messages after a second delete, want 0", got)
+	}
+	if got := visibleMessages(t, svc, userB); got != 12 {
+		t.Errorf("B sees %d messages, want 12", got)
+	}
 }
 
 // CHAT-209
 func TestDeleteRequiresMembership(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	svc, _ := setupRoom(t, 10)
+	ctx := context.Background()
+
+	if err := svc.Clear(ctx, testBundleID, "user-c", room); err == nil {
+		t.Fatal("Clear by a non-participant succeeded, want an error")
+	}
+
+	if got := visibleMessages(t, svc, userA); got != 10 {
+		t.Errorf("A sees %d messages, want 10", got)
+	}
+	if got := visibleMessages(t, svc, userB); got != 10 {
+		t.Errorf("B sees %d messages, want 10", got)
+	}
 }
 
 // CHAT-301 / CHAT-302
 func TestArchiveAndDeleteInteract(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	ctx := context.Background()
+
+	t.Run("delete supersedes archive", func(t *testing.T) {
+		svc, _ := setupRoom(t, 10)
+		if err := svc.Archive(ctx, testBundleID, userA, room, true); err != nil {
+			t.Fatalf("Archive: %v", err)
+		}
+		if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+			t.Fatalf("Clear: %v", err)
+		}
+		if got := listedRooms(t, svc, userA); got != 0 {
+			t.Errorf("A lists %d rooms, want 0", got)
+		}
+		if got := visibleMessages(t, svc, userA); got != 0 {
+			t.Errorf("A sees %d messages, want 0", got)
+		}
+	})
+
+	t.Run("archiving after a delete keeps the cutoff", func(t *testing.T) {
+		svc, c := setupRoom(t, 10)
+		if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+			t.Fatalf("Clear: %v", err)
+		}
+		if _, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("m11"), nil, nil, nil); err != nil {
+			t.Fatalf("AddMessage: %v", err)
+		}
+		if err := svc.Archive(ctx, testBundleID, userA, room, true); err != nil {
+			t.Fatalf("Archive: %v", err)
+		}
+		if got := listedRooms(t, svc, userA); got != 0 {
+			t.Fatalf("A lists %d rooms after archiving, want 0", got)
+		}
+
+		if _, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("m12"), nil, nil, nil); err != nil {
+			t.Fatalf("AddMessage: %v", err)
+		}
+		if got := listedRooms(t, svc, userA); got != 1 {
+			t.Errorf("A lists %d rooms, want 1", got)
+		}
+		// Two messages after the cutoff, never the original ten.
+		if got := visibleMessages(t, svc, userA); got != 2 {
+			t.Errorf("A sees %d messages, want 2", got)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -405,7 +596,10 @@ func TestUnsendKeepsTheRowForBothSides(t *testing.T) {
 
 // CHAT-303: the per-message delete and the room-level cutoff stack.
 func TestPerMessageDeleteStacksWithTheRoomCutoff(t *testing.T) {
-	t.Skip("stage 2: delete not implemented yet")
+	// The room-level cutoff works here, but there is nothing to stack it with: hire-sdk
+	// has no per-message delete writer at all (gap G4 in docs/chat_visibility.md).
+	// megaphone is where this scenario runs today.
+	t.Skip("hire-sdk has no per-message delete writer (G4)")
 }
 
 // ---------------------------------------------------------------------------

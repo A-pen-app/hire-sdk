@@ -210,6 +210,23 @@ func (f *fakeChatStore) SetHidden(ctx context.Context, chatID, userID string, hi
 	return nil
 }
 
+func (f *fakeChatStore) SetCleared(ctx context.Context, chatID, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.threads[threadKey(chatID, userID)]
+	if !ok {
+		return sql.ErrNoRows
+	}
+	at := f.now
+	// Delete stamps both: the cutoff hides the history, hidden_at takes the room out
+	// of the list. Calling it again just moves both forward.
+	t.clearedAt = &at
+	t.hiddenAt = &at
+	// Rule R3: deleting marks the room read.
+	t.unreadCount = 0
+	return nil
+}
+
 func (f *fakeChatStore) Read(ctx context.Context, userID, chatID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -231,13 +248,17 @@ func (f *fakeChatStore) GetMessage(ctx context.Context, messageID string) (*mode
 	return nil, sql.ErrNoRows
 }
 
-func (f *fakeChatStore) GetMessages(ctx context.Context, chatID string, next string, count int) ([]*models.Message, error) {
+func (f *fakeChatStore) GetMessages(ctx context.Context, chatID string, next string, count int, clearedAt *time.Time) ([]*models.Message, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	// Newest first, matching ORDER BY created_at DESC.
 	out := []*models.Message{}
 	for i := len(f.messages) - 1; i >= 0; i-- {
 		if f.messages[i].ChatID != chatID {
+			continue
+		}
+		// Rule R2, mirroring the real query's AND created_at > ?
+		if !models.IsAfterCutoff(f.messages[i].CreatedAt, clearedAt) {
 			continue
 		}
 		cp := *f.messages[i]
@@ -249,12 +270,12 @@ func (f *fakeChatStore) GetMessages(ctx context.Context, chatID string, next str
 	return out, nil
 }
 
-func (f *fakeChatStore) GetNewMessages(ctx context.Context, chatID string, after time.Time) ([]*models.Message, error) {
+func (f *fakeChatStore) GetNewMessages(ctx context.Context, chatID string, after time.Time, clearedAt *time.Time) ([]*models.Message, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := []*models.Message{}
 	for _, m := range f.messages {
-		if m.ChatID == chatID && m.CreatedAt.After(after) {
+		if m.ChatID == chatID && m.CreatedAt.After(after) && models.IsAfterCutoff(m.CreatedAt, clearedAt) {
 			cp := *m
 			out = append(out, &cp)
 		}

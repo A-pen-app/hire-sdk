@@ -218,13 +218,24 @@ func TestArchiveMarksTheRoomAsRead(t *testing.T) {
 	svc, c := setupRoom(t, 0)
 	ctx := context.Background()
 
+	// Both sides accumulate unread, so the one-sided assertion below actually has
+	// something to detect: without B's non-zero count, "B is untouched" would pass
+	// even if Archive zeroed both rows.
 	for i := 0; i < 3; i++ {
 		if _, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("m"), nil, nil, nil); err != nil {
 			t.Fatalf("AddMessage: %v", err)
 		}
 	}
+	for i := 0; i < 2; i++ {
+		if _, err := c.AddMessage(ctx, userA, room, userB, models.MsgText, textPtr("m"), nil, nil, nil); err != nil {
+			t.Fatalf("AddMessage: %v", err)
+		}
+	}
 	if got := unreadOf(t, c, userA); got != 3 {
 		t.Fatalf("precondition: A has %d unread, want 3", got)
+	}
+	if got := unreadOf(t, c, userB); got != 2 {
+		t.Fatalf("precondition: B has %d unread, want 2", got)
 	}
 
 	if err := svc.Archive(ctx, testBundleID, userA, room, true); err != nil {
@@ -234,8 +245,8 @@ func TestArchiveMarksTheRoomAsRead(t *testing.T) {
 	if got := unreadOf(t, c, userA); got != 0 {
 		t.Errorf("A has %d unread after archiving, want 0", got)
 	}
-	if got := unreadOf(t, c, userB); got != 0 {
-		t.Errorf("B has %d unread, want 0 — A archiving must not touch B", got)
+	if got := unreadOf(t, c, userB); got != 2 {
+		t.Errorf("B has %d unread, want 2 — A archiving must not touch B", got)
 	}
 }
 
@@ -552,31 +563,28 @@ func TestArchiveAndDeleteInteract(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 9 / 9b — the per-message delete, which already exists
+// Scenario 9 / 9b — the per-message delete
 // ---------------------------------------------------------------------------
 
-// CHAT-311: a message the viewer deleted is dropped entirely. No "unsent" placeholder
-// is left in its place — that would read as the other party having unsent it.
-func TestPerMessageDeleteRemovesTheRowEntirely(t *testing.T) {
-	// hire-sdk has no per-message delete writer at all: the read side is fully
-	// implemented in aggregateMessages, but nothing ever sets DeletedBySender or
-	// DeletedByReceiver (gap G4 in docs/chat_visibility.md). megaphone is where this
-	// scenario runs today.
+// CHAT-311: a message the viewer deleted stays in the list and renders as unsent — the
+// row is never dropped, because a short page makes the mobile clients conclude there is
+// no older history (apen-api#180).
+//
+// hire-sdk has no per-message delete writer at all: the read side is implemented in
+// aggregateMessages, but nothing ever sets DeletedBySender or DeletedByReceiver (gap G4
+// in docs/chat_visibility.md). megaphone is where this scenario runs today.
+func TestPerMessageDeleteRendersAsUnsentAndKeepsTheRow(t *testing.T) {
 	t.Skip("hire-sdk has no per-message delete writer (G4)")
 }
 
-// CHAT-311, the other direction: the sender deleting their own message hides it from
-// the sender only.
-func TestPerMessageDeleteBySenderHidesItFromTheSenderOnly(t *testing.T) {
-	// hire-sdk has no per-message delete writer at all: the read side is fully
-	// implemented in aggregateMessages, but nothing ever sets DeletedBySender or
-	// DeletedByReceiver (gap G4 in docs/chat_visibility.md). megaphone is where this
-	// scenario runs today.
+// CHAT-311, the other direction.
+func TestPerMessageDeleteBySenderRendersAsUnsentForTheSenderOnly(t *testing.T) {
 	t.Skip("hire-sdk has no per-message delete writer (G4)")
 }
 
-// CHAT-304: unsend is a different thing from a per-message delete — the row stays and
-// both sides see the placeholder.
+// CHAT-304: unsend is a different thing from a per-message delete in intent, even
+// though the two now render the same way — unsend affects both sides, a per-message
+// delete only the viewer.
 func TestUnsendKeepsTheRowForBothSides(t *testing.T) {
 	svc, c := setupRoom(t, 3)
 	ctx := context.Background()
@@ -594,12 +602,65 @@ func TestUnsendKeepsTheRowForBothSides(t *testing.T) {
 	}
 }
 
-// CHAT-303: the per-message delete and the room-level cutoff stack.
+// CHAT-303: the per-message delete and the room-level cutoff stack. The cutoff removes
+// rows (in SQL, so paging stays correct), the per-message delete only blanks one.
 func TestPerMessageDeleteStacksWithTheRoomCutoff(t *testing.T) {
-	// The room-level cutoff works here, but there is nothing to stack it with: hire-sdk
-	// has no per-message delete writer at all (gap G4 in docs/chat_visibility.md).
-	// megaphone is where this scenario runs today.
 	t.Skip("hire-sdk has no per-message delete writer (G4)")
+}
+
+// CHAT-314: a reply that quotes a message from before the viewer's delete cutoff
+// still renders, but its quoted preview is unavailable. Deleting a room clears the
+// conversation, so letting a quote leak the pre-cutoff content back in would break
+// that promise — see docs/chat_visibility.md's R2 note on reply-quote previews.
+func TestReplyPreviewRespectsTheDeleteCutoff(t *testing.T) {
+	svc, c := setupRoom(t, 3)
+	ctx := context.Background()
+
+	quoted := c.messages[0] // oldest of the three seeded messages
+
+	// A deletes the room: everything seeded so far is now before A's cutoff.
+	if err := svc.Clear(ctx, testBundleID, userA, room); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+
+	// B replies, quoting a message from before A's cutoff.
+	replyID, err := c.AddMessage(ctx, userB, room, userA, models.MsgText, textPtr("quoting the old one"), nil, &quoted.ID, nil)
+	if err != nil {
+		t.Fatalf("AddMessage: %v", err)
+	}
+
+	msgs, _, err := svc.GetChatMessages(ctx, testBundleID, userA, room, "", 100)
+	if err != nil {
+		t.Fatalf("GetChatMessages(A): %v", err)
+	}
+	var reply *models.Message
+	for _, m := range msgs {
+		if m.ID == replyID {
+			reply = m
+		}
+	}
+	if reply == nil {
+		t.Fatalf("the reply itself is missing from A's list — it was sent after A's cutoff and should render normally")
+	}
+	if reply.ReplyTo == nil {
+		t.Fatalf("expected ReplyTo to be populated")
+	}
+	if reply.ReplyTo.Status != models.Unavailable {
+		t.Errorf("A's ReplyTo.Status = %v, want Unavailable — the quoted message is before A's delete cutoff, and Status is what clients read to render \"cannot load the original message\"", reply.ReplyTo.Status)
+	}
+
+	// B's own cutoff never moved, so B still sees the full quoted content.
+	bMsgs, _, err := svc.GetChatMessages(ctx, testBundleID, userB, room, "", 100)
+	if err != nil {
+		t.Fatalf("GetChatMessages(B): %v", err)
+	}
+	for _, m := range bMsgs {
+		if m.ID == replyID {
+			if m.ReplyTo == nil || m.ReplyTo.Status != models.Normal {
+				t.Errorf("B's copy of the reply should still show the full quoted content, got status %v", m.ReplyTo.Status)
+			}
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -610,4 +671,3 @@ func TestPerMessageDeleteStacksWithTheRoomCutoff(t *testing.T) {
 // there through PATCH /chats/:chat_id/mark. In hire-sdk, Annotate is not on the
 // service interface and has no route (gap G2 in docs/chat_visibility.md), so there is
 // nothing to assert here.
-

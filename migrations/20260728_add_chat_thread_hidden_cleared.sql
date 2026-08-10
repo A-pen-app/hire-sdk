@@ -22,5 +22,5 @@
 -- WARNING: there is no migration runner. Apply this by hand (DBA / Cloud SQL console)
 -- BEFORE deploying the code that depends on it.
 ALTER TABLE public.chat_thread
-    ADD COLUMN IF NOT EXISTS hidden_at  timestamptz,
-    ADD COLUMN IF NOT EXISTS cleared_at timestamptz;
+    ADD COLUMN IF NOT EXISTS hidden_at  timestamp without time zone,
+    ADD COLUMN IF NOT EXISTS cleared_at timestamp without time zone;

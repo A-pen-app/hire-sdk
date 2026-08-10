@@ -70,6 +70,8 @@ cleared_at IS NULL  OR  message.created_at > cleared_at
 and the message is not hidden from me by one of the pre-existing per-message
 mechanisms (unsend, per-message delete).
 
+Reply-quote previews respect the cutoff too. A reply that quotes a message from before the viewer's delete cutoff still renders normally — only its quoted preview becomes unavailable, exactly like R4's handling of an unsent or per-message-deleted quote. This has to be enforced explicitly at each call site: a quoted message is fetched separately by ID, never through the list query's SQL filter, so it does not automatically inherit the cutoff. Leaving this implicit makes it an easy regression to introduce during a refactor.
+
 **Both comparisons are strictly greater.** A timestamp exactly equal to the cutoff
 leaves the message hidden and the room archived (test cases CHAT-305 / CHAT-306).
 

@@ -42,12 +42,17 @@ func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*mod
 		CT.is_pinned,
 		C.business_card_snapshot_id,
 		C.access_status,
-		CT.hire_contact
+		CT.hire_contact,
+		CT.hidden_at,
+		CT.cleared_at
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
 	WHERE C.id=? AND C.app_id=? AND CT.sender_id=?
 	`
+	// Note there is deliberately no hidden_at filter here. Archiving only removes a
+	// room from the list; opening it by direct link or from a notification must still
+	// work and must still show every message (CHAT-102).
 	values := []interface{}{
 		chatID,
 		appID,
@@ -121,6 +126,30 @@ func (s *chatStore) Annotate(ctx context.Context, chatID, userID string, status 
 	return nil
 }
 
+// SetHidden archives or un-archives a chat room for one user (rule R1).
+//
+// Archiving also drops the room's unread count to zero (rule R3): the room leaves the
+// list and there is no archived tab to open it from, so a surviving unread badge could
+// never be cleared.
+//
+// Un-archiving only clears the flag. It does not restore an unread count, because the
+// messages that produced it have been marked read.
+func (s *chatStore) SetHidden(ctx context.Context, chatID, userID string, hidden bool) error {
+	query := `
+	UPDATE public.chat_thread
+	SET hidden_at=CASE WHEN ? THEN now() ELSE NULL END,
+		unread_count=CASE WHEN ? THEN 0 ELSE unread_count END
+	WHERE chat_id=? AND sender_id=?
+	`
+	query = s.db.Rebind(query)
+	if _, err := s.db.Exec(query, hidden, hidden, chatID, userID); err != nil {
+		logging.Errorw(ctx, "set chat thread hidden failed", "err", err, "chatID", chatID, "userID", userID, "hidden", hidden)
+		return err
+	}
+
+	return nil
+}
+
 func (s *chatStore) Pin(ctx context.Context, chatID, userID string, isPinned bool) error {
 	query := `
 	UPDATE public.chat_thread
@@ -159,7 +188,9 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		CT.is_pinned,
 		C.business_card_snapshot_id,
 		C.access_status,
-		CT.hire_contact
+		CT.hire_contact,
+		CT.hidden_at,
+		CT.cleared_at
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
@@ -169,6 +200,12 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 		"CT.sender_id=?",
 		"C.updated_at<TO_TIMESTAMP(?)",
 		"CT.status!=?",
+		// Rule R1: an archived room stays out of the list until an activity strictly
+		// later than hidden_at. C.updated_at only moves when a message is added
+		// (AddMessage / AddMessages — every other UPDATE public.chat sets a single
+		// unrelated column), so a new message from either side restores the room with
+		// no extra write on the send path. See docs/chat_visibility.md.
+		"(CT.hidden_at IS NULL OR C.updated_at>CT.hidden_at)",
 	}
 	values := []interface{}{
 		appID,

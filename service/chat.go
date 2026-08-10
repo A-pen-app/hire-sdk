@@ -482,6 +482,28 @@ func (s *chatService) SendMessage(ctx context.Context, bundleID, userID, chatID 
 	return msg, nil
 }
 
+// Archive hides a chat room from this user's list, or brings it back.
+//
+// This is a different axis from the chat_thread.status annotation: the todo/done marks
+// survive archiving, and the legacy Deleted mark keeps its own "hidden forever"
+// meaning. See docs/chat_visibility.md for why the two are not merged.
+func (s *chatService) Archive(ctx context.Context, bundleID, userID, chatID string, archived bool) error {
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return err
+	}
+
+	// Get returns an error unless this user owns a chat_thread row for the room, which
+	// is the membership check every other method in this service relies on.
+	if _, err := s.c.Get(ctx, app.ID, chatID, userID); err != nil {
+		logging.Errorw(ctx, "get chat failed", "err", err, "user_id", userID, "chat_id", chatID)
+		return err
+	}
+
+	return s.c.SetHidden(ctx, chatID, userID, archived)
+}
+
 func (s *chatService) UnsendMessage(ctx context.Context, bundleID, userID, messageID string) error {
 
 	app, err := s.a.GetByBundleID(ctx, bundleID)

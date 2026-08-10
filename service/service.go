@@ -23,6 +23,11 @@ type Chat interface {
 	FetchNewMessages(ctx context.Context, bundleID, userID, chatID string, lastMessageID string) ([]*models.Message, error)
 	SendMessage(ctx context.Context, bundleID, userID, chatID string, options ...models.SendOptionFunc) (*models.Message, error)
 	UnsendMessage(ctx context.Context, bundleID, userID, messageID string) error
+	// Archive hides a chat room from this user's list without touching any message.
+	// A new message from either side brings it back automatically, with the full
+	// history intact. Archiving also marks the room read. See docs/chat_visibility.md.
+	Archive(ctx context.Context, bundleID, userID, chatID string, archived bool) error
+
 	GetBusinessCardOnly(ctx context.Context, bundleID string, before time.Duration) ([]*models.BusinessCardChat, error)
 }
 

@@ -239,6 +239,13 @@ type ChatRoom struct {
 	ResumeSnapshot         *ChatResumeSnapshot   `json:"resume_snapshot" db:"-"`
 	BusinessCardSnapshot   *BusinessCardSnapshot `json:"business_card_snapshot" db:"-"`
 	HireContact            *HireContact          `json:"hire_contact" db:"hire_contact"`
+
+	// HiddenAt is when this user archived the room, ClearedAt when they deleted its
+	// history. Both are per-user and never exposed to the client — the room simply
+	// stops being listed, and pre-cutoff messages simply stop being returned. See
+	// docs/chat_visibility.md and models/chat_visibility.go.
+	HiddenAt  *time.Time `json:"-" db:"hidden_at"`
+	ClearedAt *time.Time `json:"-" db:"cleared_at"`
 }
 
 func (p ChatRoom) Feedtype() feedmodel.FeedType {

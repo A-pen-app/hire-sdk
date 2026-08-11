@@ -183,6 +183,8 @@ type ResumeRelation struct {
 	Status     ResumeStatus `json:"-" db:"status"`
 }
 
+// Stores an int, marshals to a string — exposed fields need the swagger tags
+// (see MessageStatus in chat.go).
 type ResumeStatus int
 
 const (

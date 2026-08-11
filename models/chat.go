@@ -47,6 +47,9 @@ func (t MessageType) String() string {
 	}
 }
 
+// These status types (MessageStatus / ChatAnnotation / AccessStatus, and
+// ResumeStatus in resume.go) store ints but marshal to strings — exposed fields
+// need swaggertype:"string" and enums, or the generated docs say integer.
 type MessageStatus int
 
 const (
@@ -115,7 +118,7 @@ type Message struct {
 	ID        string        `json:"message_id" db:"id" example:"uuid"`
 	ChatID    string        `json:"chat_id" db:"chat_id" example:"uuid"`
 	CreatedAt time.Time     `json:"created_at" db:"created_at" example:"2023-10-01T04:00:00Z"`
-	Status    MessageStatus `json:"status" db:"status"`
+	Status    MessageStatus `json:"status" db:"status" swaggertype:"string" enums:"NORMAL,UNSENT,DELETED,UNAVAILABLE" example:"NORMAL"`
 	IsMine    *bool         `json:"is_mine,omitempty" db:"-"`
 	// 0: 不使用
 	// 1: 文字訊息
@@ -222,7 +225,7 @@ type ChatRoom struct {
 	Receiver    *DisplayUser    `json:"receiver" db:"-"`
 	UnreadCount int64           `json:"unread_count" db:"unread_count"`
 	LastSeenAt  *time.Time      `json:"last_seen_at" db:"last_seen_at" example:"2023-10-01T04:00:00Z"`
-	Status      ChatAnnotation  `json:"status" db:"status"`
+	Status      ChatAnnotation  `json:"status" db:"status" swaggertype:"string" enums:"NONE,TODO,DONE,DELETED" example:"NONE"`
 	ControlFlag ChatControlFlag `json:"-" db:"control_flag"`
 	IsPinned    bool            `json:"is_pinned" db:"is_pinned"`
 	// 這一側自己取的名稱，對方看不到。nil 表示沒設過，是否退回 Receiver.Name 由呼叫端決定。
@@ -238,7 +241,7 @@ type ChatRoom struct {
 	BusinessCardSnapshotID *string               `json:"-" db:"business_card_snapshot_id"`
 	Role                   Role                  `json:"role" db:"-"`
 	HireStatus             *HireStatus           `json:"hire_status" db:"-" default:"INACTIVE" example:"INACTIVE"`
-	AccessStatus           AccessStatus          `json:"access_status" db:"access_status"`
+	AccessStatus           AccessStatus          `json:"access_status" db:"access_status" swaggertype:"string" enums:"LOCKED,UNLOCKED" example:"LOCKED"`
 	ResumeSnapshot         *ChatResumeSnapshot   `json:"resume_snapshot" db:"-"`
 	BusinessCardSnapshot   *BusinessCardSnapshot `json:"business_card_snapshot" db:"-"`
 	HireContact            *HireContact          `json:"hire_contact" db:"hire_contact"`
@@ -260,7 +263,7 @@ type ChatResumeSnapshot struct {
 	ID      string         `json:"id"`
 	Content *ResumeContent `json:"content"`
 	IsRead  bool           `json:"is_read"`
-	Status  ResumeStatus   `json:"status"`
+	Status  ResumeStatus   `json:"status" swaggertype:"string" enums:"LOCKED,UNLOCKED" example:"LOCKED"`
 }
 
 type HireStatus string

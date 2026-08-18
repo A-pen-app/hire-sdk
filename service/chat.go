@@ -236,6 +236,23 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 	return chat, nil
 }
 
+// CountChats counts the rooms matching options; a badge adds models.Unread().
+func (s *chatService) CountChats(ctx context.Context, bundleID, userID string, options ...models.GetOptionFunc) (int, error) {
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return 0, err
+	}
+
+	opt := models.GetOption{}
+	for _, f := range options {
+		if err := f(&opt); err != nil {
+			return 0, err
+		}
+	}
+	return s.c.CountChats(ctx, app.ID, userID, opt)
+}
+
 func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, next string, count int, options ...models.GetOptionFunc) ([]*models.ChatRoom, string, error) {
 	if count == 0 {
 		return []*models.ChatRoom{}, next, nil
@@ -255,7 +272,7 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 		}
 	}
 
-	chats, err := s.c.GetChats(ctx, app.ID, userID, next, count+1, opt.Status, opt.UnreadOnly, opt.IsOfficialRole, opt.PostID, opt.RealName)
+	chats, err := s.c.GetChats(ctx, app.ID, userID, next, count+1, opt)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get chats", "err", err, "appID", app.ID, "userID", userID)
 		return nil, "", err

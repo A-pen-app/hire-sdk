@@ -137,7 +137,67 @@ func (s *chatStore) Pin(ctx context.Context, chatID, userID string, isPinned boo
 	return nil
 }
 
-func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, status models.ChatAnnotation, unreadOnly bool, isOfficialRole bool, postID *string, realName *string) ([]*models.ChatRoom, error) {
+// chatConditions is shared by GetChats and CountChats, so a count never
+// disagrees with the list it labels. Paging stays out of it.
+func chatConditions(appID, userID string, opt models.GetOption) ([]string, []interface{}) {
+	conditions := []string{"C.app_id=?", "CT.sender_id=?", "CT.status!=?"}
+	values := []interface{}{appID, userID, models.Deleted}
+
+	if opt.IsOfficialRole {
+		conditions = append(conditions, "((C.post_id IS NULL AND CT.control_flag = ?) OR (C.post_id IS NOT NULL AND CT.control_flag IN (?, ?)))")
+		values = append(values, models.Pass, models.Pass, models.NeverGotMessages)
+	} else {
+		conditions = append(conditions, "CT.control_flag IN (?, ?)")
+		values = append(values, models.Pass, models.NeverGotMessages)
+	}
+	if opt.Status != models.None {
+		conditions = append(conditions, "CT.status=?")
+		values = append(values, opt.Status)
+	}
+	if opt.UnreadOnly {
+		if opt.AwaitingReply {
+			conditions = append(conditions, "(CT.unread_count>0 OR C.last_message_id IS NULL)")
+		} else {
+			conditions = append(conditions, "CT.unread_count>0")
+		}
+	}
+	if opt.HasPost {
+		conditions = append(conditions, "C.post_id IS NOT NULL")
+	}
+	if opt.PostID != nil {
+		conditions = append(conditions, "C.post_id=?")
+		values = append(values, *opt.PostID)
+	}
+	if opt.ExcludeOwnApplications {
+		// Both belong to the job seeker, so either one marks the viewer as one.
+		conditions = append(conditions, `NOT EXISTS (
+			SELECT 1 FROM public.resume_relation RR
+			WHERE RR.chat_id=C.id AND RR.user_id=?)`)
+		values = append(values, userID)
+		conditions = append(conditions, `NOT EXISTS (
+			SELECT 1 FROM public.business_card_snapshot BCS
+			JOIN public.business_card BC ON BC.id=BCS.business_card_id
+			WHERE BCS.id=C.business_card_snapshot_id AND BC.user_id=?)`)
+		values = append(values, userID)
+	}
+	if opt.RealName != nil {
+		// 用 EXISTS 而非 join：join 得改動每個分支共用的 FROM 子句。
+		conditions = append(conditions, `(
+			EXISTS (
+				SELECT 1 FROM public.resume_relation RR
+				JOIN public.resume_snapshot RS ON RS.id=RR.snapshot_id
+				WHERE RR.chat_id=C.id AND RS.content->>'real_name' ILIKE ?)
+			OR EXISTS (
+				SELECT 1 FROM public.business_card_snapshot BS
+				WHERE BS.id=C.business_card_snapshot_id AND BS.content->>'real_name' ILIKE ?)
+		)`)
+		pattern := containsPattern(*opt.RealName)
+		values = append(values, pattern, pattern)
+	}
+	return conditions, values
+}
+
+func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, opt models.GetOption) ([]*models.ChatRoom, error) {
 	chats := []*models.ChatRoom{}
 	if next == "" {
 		// +2 seconds to prevent the last chat is created at almost the same time with getting chats
@@ -166,51 +226,10 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
 	WHERE `
-	conditions := []string{
-		"C.app_id=?",
-		"CT.sender_id=?",
-		"C.updated_at<TO_TIMESTAMP(?)",
-		"CT.status!=?",
-	}
-	values := []interface{}{
-		appID,
-		userID,
-		next,
-		models.Deleted,
-	}
-
-	if isOfficialRole {
-		conditions = append(conditions, "((C.post_id IS NULL AND CT.control_flag = ?) OR (C.post_id IS NOT NULL AND CT.control_flag IN (?, ?)))")
-		values = append(values, models.Pass, models.Pass, models.NeverGotMessages)
-	} else {
-		conditions = append(conditions, "CT.control_flag IN (?, ?)")
-		values = append(values, models.Pass, models.NeverGotMessages)
-	}
-	if status != models.None {
-		conditions = append(conditions, "CT.status=?")
-		values = append(values, status)
-	}
-	if unreadOnly {
-		conditions = append(conditions, "CT.unread_count>0")
-	}
-	if postID != nil {
-		conditions = append(conditions, "C.post_id=?")
-		values = append(values, *postID)
-	}
-	if realName != nil {
-		// 用 EXISTS 而非 join：join 得改動每個分支共用的 FROM 子句。
-		conditions = append(conditions, `(
-			EXISTS (
-				SELECT 1 FROM public.resume_relation RR
-				JOIN public.resume_snapshot RS ON RS.id=RR.snapshot_id
-				WHERE RR.chat_id=C.id AND RS.content->>'real_name' ILIKE ?)
-			OR EXISTS (
-				SELECT 1 FROM public.business_card_snapshot BS
-				WHERE BS.id=C.business_card_snapshot_id AND BS.content->>'real_name' ILIKE ?)
-		)`)
-		pattern := containsPattern(*realName)
-		values = append(values, pattern, pattern)
-	}
+	conditions, values := chatConditions(appID, userID, opt)
+	// Paging, not visibility.
+	conditions = append(conditions, "C.updated_at<TO_TIMESTAMP(?)")
+	values = append(values, next)
 
 	query = query + strings.Join(conditions, " AND ") + " ORDER BY CT.is_pinned DESC, C.updated_at DESC LIMIT ?"
 	values = append(values, count)
@@ -223,13 +242,15 @@ func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next str
 	return chats, nil
 }
 
-// 可見性條件跟 GetChats 對齊，只差不帶 cursor（總數本來就要跨頁算）。
-// 改 GetChats 的條件時這裡要跟著改，否則數字會跟實際列得出來的對不上。
 func (s *chatStore) CountByPostIDs(ctx context.Context, appID, userID string, postIDs []string) (map[string]int, error) {
 	counts := map[string]int{}
 	if len(postIDs) == 0 {
 		return counts, nil
 	}
+
+	conditions, values := chatConditions(appID, userID, models.GetOption{})
+	conditions = append(conditions, "C.post_id=ANY(?)")
+	values = append(values, pq.Array(postIDs))
 
 	query := `
 	SELECT
@@ -238,8 +259,7 @@ func (s *chatStore) CountByPostIDs(ctx context.Context, appID, userID string, po
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
-	WHERE C.app_id=? AND CT.sender_id=? AND C.post_id=ANY(?)
-		AND CT.status!=? AND CT.control_flag IN (?, ?)
+	WHERE ` + strings.Join(conditions, " AND ") + `
 	GROUP BY C.post_id
 	`
 	query = s.db.Rebind(query)
@@ -248,8 +268,7 @@ func (s *chatStore) CountByPostIDs(ctx context.Context, appID, userID string, po
 		PostID string `db:"post_id"`
 		Count  int    `db:"count"`
 	}{}
-	if err := s.db.SelectContext(ctx, &rows, query, appID, userID, pq.Array(postIDs),
-		models.Deleted, models.Pass, models.NeverGotMessages); err != nil {
+	if err := s.db.SelectContext(ctx, &rows, query, values...); err != nil {
 		logging.Errorw(ctx, "count chats by post ids failed", "err", err, "appID", appID, "userID", userID)
 		return nil, err
 	}
@@ -258,6 +277,37 @@ func (s *chatStore) CountByPostIDs(ctx context.Context, appID, userID string, po
 		counts[r.PostID] = r.Count
 	}
 	return counts, nil
+}
+
+// CountChats counts what GetChats would list under the same options.
+func (s *chatStore) CountChats(ctx context.Context, appID, userID string, opt models.GetOption) (int, error) {
+	conditions, values := chatConditions(appID, userID, opt)
+
+	query := `
+	SELECT COUNT(*)
+	FROM public.chat_thread AS CT
+	JOIN public.chat AS C
+	ON CT.chat_id=C.id
+	WHERE ` + strings.Join(conditions, " AND ")
+	query = s.db.Rebind(query)
+
+	count := 0
+	if err := s.db.GetContext(ctx, &count, query, values...); err != nil {
+		logging.Errorw(ctx, "count chats failed", "err", err, "appID", appID, "userID", userID)
+		return 0, err
+	}
+	return count, nil
+}
+
+// Deprecated: use CountChats with models.RecruitingRooms() and models.Unread().
+func (s *chatStore) CountUnreadChats(ctx context.Context, appID, userID string) (int, error) {
+	opt := models.GetOption{}
+	for _, f := range []models.GetOptionFunc{models.RecruitingRooms(), models.Unread()} {
+		if err := f(&opt); err != nil {
+			return 0, err
+		}
+	}
+	return s.CountChats(ctx, appID, userID, opt)
 }
 
 func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error) {

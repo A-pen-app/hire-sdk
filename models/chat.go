@@ -310,6 +310,12 @@ type GetOption struct {
 	IsOfficialRole bool
 	PostID         *string
 	RealName       *string
+	// AwaitingReply also counts rooms nobody has spoken in yet.
+	AwaitingReply bool
+	// HasPost drops the official room, which every list open recreates.
+	HasPost bool
+	// ExcludeOwnApplications drops the rooms the viewer applied through.
+	ExcludeOwnApplications bool
 }
 type GetOptionFunc func(*GetOption) error
 
@@ -349,6 +355,25 @@ func ByRealName(name string) GetOptionFunc {
 		if trimmed := strings.TrimSpace(name); trimmed != "" {
 			opt.RealName = &trimmed
 		}
+		return nil
+	}
+}
+
+// RecruitingRooms keeps only what the viewer recruits in. Opt in per call — a
+// user can be both a recruiter and a job seeker.
+func RecruitingRooms() GetOptionFunc {
+	return func(opt *GetOption) error {
+		opt.HasPost = true
+		opt.ExcludeOwnApplications = true
+		return nil
+	}
+}
+
+// Unread: the room has unread messages, or nobody has replied in it yet.
+func Unread() GetOptionFunc {
+	return func(opt *GetOption) error {
+		opt.UnreadOnly = true
+		opt.AwaitingReply = true
 		return nil
 	}
 }

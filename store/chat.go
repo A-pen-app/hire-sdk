@@ -180,8 +180,9 @@ func chatConditions(appID, userID string, opt models.GetOption) ([]string, []int
 			WHERE BCS.id=C.business_card_snapshot_id AND BC.user_id=?)`)
 		values = append(values, userID)
 	}
-	if opt.RealName != nil {
-		// 用 EXISTS 而非 join：join 得改動每個分支共用的 FROM 子句。
+	if opt.Keyword != nil {
+		// 履歷、名片、自訂名稱三個都比；CT 已被 sender_id 圈住，所以比到的是自己
+		// 取的名字。用 EXISTS 而非 join：join 得改動每個分支共用的 FROM 子句。
 		conditions = append(conditions, `(
 			EXISTS (
 				SELECT 1 FROM public.resume_relation RR
@@ -190,9 +191,10 @@ func chatConditions(appID, userID string, opt models.GetOption) ([]string, []int
 			OR EXISTS (
 				SELECT 1 FROM public.business_card_snapshot BS
 				WHERE BS.id=C.business_card_snapshot_id AND BS.content->>'real_name' ILIKE ?)
+			OR CT.name ILIKE ?
 		)`)
-		pattern := containsPattern(*opt.RealName)
-		values = append(values, pattern, pattern)
+		pattern := containsPattern(*opt.Keyword)
+		values = append(values, pattern, pattern, pattern)
 	}
 	return conditions, values
 }

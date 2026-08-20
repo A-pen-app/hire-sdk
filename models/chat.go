@@ -309,7 +309,7 @@ type GetOption struct {
 	UnreadOnly     bool
 	IsOfficialRole bool
 	PostID         *string
-	RealName       *string
+	Keyword        *string
 	// AwaitingReply also counts rooms nobody has spoken in yet.
 	AwaitingReply bool
 	// HasPost drops the official room, which every list open recreates.
@@ -348,12 +348,12 @@ func ByChatPostID(postID string) GetOptionFunc {
 	}
 }
 
-// 比履歷或名片的 real_name，命中任一即可。空白關鍵字丟掉，不然清空搜尋框會變成
-// 符合全部。
-func ByRealName(name string) GetOptionFunc {
+// 比履歷姓名、名片姓名與自訂名稱，命中任一即可。空白丟掉，不然清空搜尋框會
+// 變成符合全部。
+func ByKeyword(keyword string) GetOptionFunc {
 	return func(opt *GetOption) error {
-		if trimmed := strings.TrimSpace(name); trimmed != "" {
-			opt.RealName = &trimmed
+		if trimmed := strings.TrimSpace(keyword); trimmed != "" {
+			opt.Keyword = &trimmed
 		}
 		return nil
 	}

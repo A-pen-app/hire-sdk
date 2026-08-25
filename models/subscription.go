@@ -11,6 +11,7 @@ const (
 	SubscriptionSubscribed SubscriptionStatus = 1 << iota // 已訂閱
 	SubOptionFree                                         // 有免費券
 	SubscriptionNone                                      // 有訂閱過但沒有有效訂閱
+	SubscriptionPaused                                    // 暫停中，仍算有效訂閱
 )
 
 const (

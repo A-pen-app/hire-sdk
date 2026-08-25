@@ -882,6 +882,22 @@ func (s *chatStore) UpdateBusinessCardSnapshotID(ctx context.Context, chatID, sn
 	return nil
 }
 
+// UpdateAccessStatusByPosts is the batch counterpart of
+// resumeStore.UpdateRelationListStatus: the two are always used together, so
+// they take the same shape.
+func (s *chatStore) UpdateAccessStatusByPosts(ctx context.Context, postIDs []string, status models.AccessStatus) error {
+	query := s.db.Rebind(`
+	UPDATE public.chat
+	SET access_status=?
+	WHERE post_id = ANY(?)
+	`)
+	if _, err := s.db.Exec(query, status, pq.Array(postIDs)); err != nil {
+		logging.Errorw(ctx, "failed to update chat access status by posts", "err", err, "postIDs", postIDs)
+		return err
+	}
+	return nil
+}
+
 func (s *chatStore) UpdateAccessStatus(ctx context.Context, chatID string, status models.AccessStatus) error {
 	query := `
 	UPDATE public.chat SET access_status=?

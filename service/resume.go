@@ -15,14 +15,38 @@ type resumeService struct {
 	r store.Resume
 	a store.App
 	c store.Chat
+	s store.Subscription
 }
 
-func NewResume(r store.Resume, a store.App, c store.Chat) Resume {
+func NewResume(r store.Resume, a store.App, c store.Chat, s store.Subscription) Resume {
 	return &resumeService{
 		r: r,
 		a: a,
 		c: c,
+		s: s,
 	}
+}
+
+// visibleStatus is what a recruiter sees for one resume: its own status, unless
+// a subscription unlocks everything. Same rule the chat list applies to the
+// room, so the two screens cannot disagree about the same resume.
+func visibleStatus(stored models.ResumeStatus, subscribed bool) models.ResumeStatus {
+	if stored == models.ResumeStatusUnlocked || subscribed {
+		return models.ResumeStatusUnlocked
+	}
+	return stored
+}
+
+// subscribed reports whether the viewer's subscription is live. A failed lookup
+// reads as "not subscribed": the stored status still stands, so the worst case
+// is a lock the viewer can lift by reloading.
+func (s *resumeService) subscribed(ctx context.Context, appID, viewerID string) bool {
+	sub, err := s.s.Get(ctx, appID, viewerID)
+	if err != nil && err != sql.ErrNoRows {
+		logging.Errorw(ctx, "failed to get subscription", "err", err, "appID", appID, "viewerID", viewerID)
+		return false
+	}
+	return sub != nil && sub.Status.HasOneOf(models.SubscriptionSubscribed)
 }
 
 func (s *resumeService) Patch(ctx context.Context, bundleID, userID string, resume *models.ResumeContent) error {
@@ -79,7 +103,7 @@ func (s *resumeService) GetUserAppliedPostIDs(ctx context.Context, bundleID, use
 
 // ListRelations returns one page of relations, newest first. Narrow it with
 // the store's options.
-func (s *resumeService) ListRelations(ctx context.Context, bundleID string, offset, count int, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, error) {
+func (s *resumeService) ListRelations(ctx context.Context, bundleID, viewerID string, offset, count int, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, error) {
 	if count <= 0 {
 		return []*models.ResumeRelation{}, nil
 	}
@@ -95,7 +119,27 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID string, offs
 		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", app.ID)
 		return nil, err
 	}
+	subscribed := s.subscribed(ctx, app.ID, viewerID)
+	for _, relation := range relations {
+		relation.Status = visibleStatus(relation.Status, subscribed)
+	}
 	return relations, nil
+}
+
+// GetRelationFor is GetRelation with the viewer's subscription applied, so the
+// single resume and the list agree.
+func (s *resumeService) GetRelationFor(ctx context.Context, bundleID, viewerID string, opts ...models.GetRelationOptionFunc) (*models.ResumeRelation, error) {
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return nil, err
+	}
+	relation, err := s.r.GetRelation(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	relation.Status = visibleStatus(relation.Status, s.subscribed(ctx, app.ID, viewerID))
+	return relation, nil
 }
 
 func (s *resumeService) GetSnapshot(ctx context.Context, snapshotID string) (*models.ResumeSnapshot, error) {

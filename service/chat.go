@@ -192,18 +192,11 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 			jobSeekerID = ownerMap[*chat.BusinessCardSnapshotID]
 		}
 
-		// AccessStatus: 求職方永遠 UNLOCKED，徵才方先看 DB 值、再看 subscription
 		if userID == jobSeekerID {
 			chat.AccessStatus = models.AccessStatusUnlocked
-		} else if chat.AccessStatus != models.AccessStatusUnlocked {
-			subscription, err := s.s.Get(ctx, app.ID, userID)
-			if err != nil && err != sql.ErrNoRows {
-				logging.Errorw(ctx, "failed to get subscription", "err", err, "appID", app.ID, "userID", userID)
-				return nil, err
-			}
-			if subscription != nil && subscription.Status.HasOneOf(models.SubscriptionSubscribed) {
-				chat.AccessStatus = models.AccessStatusUnlocked
-			}
+		} else if chat.AccessStatus != models.AccessStatusUnlocked &&
+			subscribed(ctx, s.s, app.ID, userID) {
+			chat.AccessStatus = models.AccessStatusUnlocked
 		}
 
 		// Resume snapshot

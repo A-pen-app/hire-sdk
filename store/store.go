@@ -47,6 +47,7 @@ type Chat interface {
 	UpdateName(ctx context.Context, chatID string, userID string, name *string) error
 	UpdateBusinessCardSnapshotID(ctx context.Context, chatID, snapshotID string) error
 	UpdateAccessStatus(ctx context.Context, chatID string, status models.AccessStatus) error
+	UpdateAccessStatusByPosts(ctx context.Context, postIDs []string, status models.AccessStatus) error
 	GetUserChattingPostIDs(ctx context.Context, appID, userID string) ([]string, error)
 	GetBusinessCardChats(ctx context.Context, appID string, before time.Duration) ([]*models.BusinessCardChat, error)
 	GetBusinessCardChatInfos(ctx context.Context, chatIDs []string) (map[string]*models.BusinessCardChatInfo, error)

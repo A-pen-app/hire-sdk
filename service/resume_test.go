@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"strconv"
 	"testing"
@@ -30,6 +31,22 @@ type fakeResumeStore struct {
 
 	gotAppID string
 	gotOpt   models.ListRelationOption
+}
+
+// fakeSubs answers one subscription state for every lookup.
+type fakeSubs struct{ subscribed bool }
+
+func (f fakeSubs) Get(context.Context, string, string) (*models.UserSubscription, error) {
+	if !f.subscribed {
+		return nil, sql.ErrNoRows
+	}
+	return &models.UserSubscription{Status: models.SubscriptionSubscribed}, nil
+}
+func (f fakeSubs) List(context.Context, string, []string) ([]*models.UserSubscription, error) {
+	return nil, nil
+}
+func (f fakeSubs) Update(context.Context, string, string, models.SubscriptionStatus, *time.Time) error {
+	return nil
 }
 
 func (f *fakeResumeStore) ListRelations(ctx context.Context, appID string, opts ...models.ListRelationOptionFunc) ([]*models.ResumeRelation, error) {
@@ -91,9 +108,9 @@ func TestListRelationsPaging(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			r := &fakeResumeStore{relations: page}
-			s := NewResume(r, fakeAppStore{}, nil)
+			s := NewResume(r, fakeAppStore{}, nil, fakeSubs{})
 
-			got, err := s.ListRelations(context.Background(), "com.yoku.apen", c.offset, c.count, models.ByPostIDs([]string{"post-1"}))
+			got, err := s.ListRelations(context.Background(), "com.yoku.apen", "viewer", c.offset, c.count, models.ByPostIDs([]string{"post-1"}))
 			if err != nil {
 				t.Fatalf("ListRelations: %v", err)
 			}
@@ -129,8 +146,8 @@ func TestPaginateClampsNegativeOffset(t *testing.T) {
 	}
 
 	r := &fakeResumeStore{relations: relationsAt(time.Now(), time.Now())}
-	s := NewResume(r, fakeAppStore{}, nil)
-	if _, err := s.ListRelations(context.Background(), "com.yoku.apen", -5, 20); err != nil {
+	s := NewResume(r, fakeAppStore{}, nil, fakeSubs{})
+	if _, err := s.ListRelations(context.Background(), "com.yoku.apen", "viewer", -5, 20); err != nil {
 		t.Fatalf("ListRelations: %v", err)
 	}
 	if r.gotOpt.Offset != 0 {
@@ -143,9 +160,9 @@ func TestListRelationsNonPositiveCountSkipsTheStore(t *testing.T) {
 	for _, count := range []int{0, -1, -20} {
 		t.Run(strconv.Itoa(count), func(t *testing.T) {
 			r := &fakeResumeStore{relations: relationsAt(time.Now(), time.Now())}
-			s := NewResume(r, fakeAppStore{}, nil)
+			s := NewResume(r, fakeAppStore{}, nil, fakeSubs{})
 
-			got, err := s.ListRelations(context.Background(), "com.yoku.apen", 0, count)
+			got, err := s.ListRelations(context.Background(), "com.yoku.apen", "viewer", 0, count)
 			if err != nil {
 				t.Fatalf("ListRelations: %v", err)
 			}
@@ -156,5 +173,58 @@ func TestListRelationsNonPositiveCountSkipsTheStore(t *testing.T) {
 				t.Error("store was queried for a non-positive page")
 			}
 		})
+	}
+}
+
+func TestVisibleStatusFollowsSubscription(t *testing.T) {
+	// Without this, a subscribed recruiter sees every resume locked in the list
+	// while the same ones read as unlocked in the chat.
+	locked := []*models.ResumeRelation{
+		{ID: "r1", Status: models.ResumeStatusLocked},
+		{ID: "r2", Status: models.ResumeStatusUnlocked},
+	}
+
+	for _, c := range []struct {
+		name       string
+		subscribed bool
+		want       []models.ResumeStatus
+	}{
+		{"訂閱中：全部視為解鎖", true, []models.ResumeStatus{models.ResumeStatusUnlocked, models.ResumeStatusUnlocked}},
+		{"沒訂閱：照 DB 的值", false, []models.ResumeStatus{models.ResumeStatusLocked, models.ResumeStatusUnlocked}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := &fakeResumeStore{relations: []*models.ResumeRelation{
+				{ID: locked[0].ID, Status: locked[0].Status},
+				{ID: locked[1].ID, Status: locked[1].Status},
+			}}
+			s := NewResume(r, fakeAppStore{}, nil, fakeSubs{subscribed: c.subscribed})
+
+			got, err := s.ListRelations(context.Background(), "com.yoku.apen", "viewer", 0, 10)
+			if err != nil {
+				t.Fatalf("ListRelations: %v", err)
+			}
+			for i := range got {
+				if got[i].Status != c.want[i] {
+					t.Errorf("relation %d: got %v, want %v", i, got[i].Status, c.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestOwnerAlwaysSeesTheirOwnResume(t *testing.T) {
+	// The single-resume endpoint admits two viewers: the owner and the post
+	// author. The owner must never see their own resume locked.
+	r := &fakeResumeStore{relations: []*models.ResumeRelation{
+		{ID: "r1", UserID: "seeker", Status: models.ResumeStatusLocked},
+	}}
+	s := NewResume(r, fakeAppStore{}, nil, fakeSubs{subscribed: false})
+
+	got, err := s.ListRelations(context.Background(), "com.yoku.apen", "seeker", 0, 10)
+	if err != nil {
+		t.Fatalf("ListRelations: %v", err)
+	}
+	if got[0].Status != models.ResumeStatusUnlocked {
+		t.Errorf("owner sees %v, want unlocked", got[0].Status)
 	}
 }

@@ -7,14 +7,11 @@ import (
 
 type SubscriptionStatus int
 
-// Stored as an int, so append — inserting in the middle shifts existing rows.
 const (
 	SubscriptionSubscribed SubscriptionStatus = 1 << iota // 已訂閱
 	SubOptionFree                                         // 有免費券
 	SubscriptionNone                                      // 有訂閱過但沒有有效訂閱
-	// Rides alongside SubscriptionSubscribed: the clock is stopped, the
-	// entitlement stands. Only code that must act on the pause reads this.
-	SubscriptionPaused
+	SubscriptionPaused                                    // 暫停中，仍算有效訂閱
 )
 
 const (

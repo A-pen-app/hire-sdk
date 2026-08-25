@@ -7,10 +7,17 @@ import (
 
 type SubscriptionStatus int
 
+// Bit values, stored as an int. Append new ones at the end — inserting in the
+// middle shifts what is already in the database.
 const (
 	SubscriptionSubscribed SubscriptionStatus = 1 << iota // 已訂閱
 	SubOptionFree                                         // 有免費券
 	SubscriptionNone                                      // 有訂閱過但沒有有效訂閱
+	// SubscriptionPaused rides alongside SubscriptionSubscribed: a paused
+	// subscription is still an entitlement, its clock is just stopped. Callers
+	// that only ask "may this user hire" keep reading Subscribed and see no
+	// change; the ones that must act on the pause read this.
+	SubscriptionPaused
 )
 
 const (

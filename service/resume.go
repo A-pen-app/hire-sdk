@@ -27,10 +27,9 @@ func NewResume(r store.Resume, a store.App, c store.Chat, s store.Subscription) 
 	}
 }
 
-// visibleStatus applies the shared rule to one relation: its owner always sees
-// their own resume, a subscription lifts every lock, otherwise the stored status
-// stands.
-func visibleStatus(relation *models.ResumeRelation, viewerID string, subscribed bool) models.ResumeStatus {
+// visibleStatus applies liftsLock to one relation; relation.UserID is its owner,
+// the counterpart of the chat rule's job seeker.
+func visibleStatus(relation *models.ResumeRelation, viewerID string, subscribed func() bool) models.ResumeStatus {
 	if relation.Status == models.ResumeStatusUnlocked ||
 		liftsLock(viewerID == relation.UserID, subscribed) {
 		return models.ResumeStatusUnlocked
@@ -108,9 +107,10 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID, viewerID st
 		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", app.ID)
 		return nil, err
 	}
+	// Resolved once for the page, not per row.
 	isSubscribed := subscribed(ctx, s.s, app.ID, viewerID)
 	for _, relation := range relations {
-		relation.Status = visibleStatus(relation, viewerID, isSubscribed)
+		relation.Status = visibleStatus(relation, viewerID, func() bool { return isSubscribed })
 	}
 	return relations, nil
 }
@@ -126,7 +126,7 @@ func (s *resumeService) GetRelation(ctx context.Context, bundleID, viewerID stri
 	if err != nil {
 		return nil, err
 	}
-	relation.Status = visibleStatus(relation, viewerID, subscribed(ctx, s.s, app.ID, viewerID))
+	relation.Status = visibleStatus(relation, viewerID, func() bool { return subscribed(ctx, s.s, app.ID, viewerID) })
 	return relation, nil
 }
 

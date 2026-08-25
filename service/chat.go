@@ -192,10 +192,8 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 			jobSeekerID = ownerMap[*chat.BusinessCardSnapshotID]
 		}
 
-		// 求職方永遠 UNLOCKED，徵才方先看 DB 值、再看 subscription。|| 有短路，
-		// 所以求職方那條不會多查一次訂閱。
 		if chat.AccessStatus != models.AccessStatusUnlocked &&
-			liftsLock(userID == jobSeekerID, subscribed(ctx, s.s, app.ID, userID)) {
+			liftsLock(userID == jobSeekerID, func() bool { return subscribed(ctx, s.s, app.ID, userID) }) {
 			chat.AccessStatus = models.AccessStatusUnlocked
 		}
 
@@ -344,7 +342,7 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 			}
 
 			if chats[i].AccessStatus != models.AccessStatusUnlocked &&
-				liftsLock(userID == jobSeekerID, isSubscribed) {
+				liftsLock(userID == jobSeekerID, func() bool { return isSubscribed }) {
 				chats[i].AccessStatus = models.AccessStatusUnlocked
 			}
 

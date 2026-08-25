@@ -177,7 +177,8 @@ func TestListRelationsNonPositiveCountSkipsTheStore(t *testing.T) {
 }
 
 func TestVisibleStatusFollowsSubscription(t *testing.T) {
-	// 沒有覆蓋的話，訂閱中的徵才方會在履歷列表看到全鎖，而同一批在聊天室是開的。
+	// Without this, a subscribed recruiter sees every resume locked in the list
+	// while the same ones read as unlocked in the chat.
 	locked := []*models.ResumeRelation{
 		{ID: "r1", Status: models.ResumeStatusLocked},
 		{ID: "r2", Status: models.ResumeStatusUnlocked},
@@ -212,7 +213,8 @@ func TestVisibleStatusFollowsSubscription(t *testing.T) {
 }
 
 func TestOwnerAlwaysSeesTheirOwnResume(t *testing.T) {
-	// 單筆那支的授權允許兩種人：履歷主人與職缺作者。主人看自己的東西不該被鎖。
+	// The single-resume endpoint admits two viewers: the owner and the post
+	// author. The owner must never see their own resume locked.
 	r := &fakeResumeStore{relations: []*models.ResumeRelation{
 		{ID: "r1", UserID: "seeker", Status: models.ResumeStatusLocked},
 	}}

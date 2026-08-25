@@ -882,9 +882,8 @@ func (s *chatStore) UpdateBusinessCardSnapshotID(ctx context.Context, chatID, sn
 	return nil
 }
 
-// UpdateAccessStatusByPosts is the batch counterpart of
-// resumeStore.UpdateRelationListStatus: the two are always used together, so
-// they take the same shape.
+// UpdateAccessStatusByPosts is the counterpart of UpdateRelationListStatus;
+// the two are always used together.
 func (s *chatStore) UpdateAccessStatusByPosts(ctx context.Context, postIDs []string, status models.AccessStatus) error {
 	query := s.db.Rebind(`
 	UPDATE public.chat

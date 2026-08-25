@@ -27,9 +27,8 @@ func NewResume(r store.Resume, a store.App, c store.Chat, s store.Subscription) 
 	}
 }
 
-// visibleStatus is what a recruiter sees for one resume: its own status, unless
-// a subscription unlocks everything. Same rule the chat list applies to the
-// room, so the two screens cannot disagree about the same resume.
+// visibleStatus is the resume's own status unless a subscription lifts it —
+// the same rule the chat list applies to the room.
 func visibleStatus(stored models.ResumeStatus, subscribed bool) models.ResumeStatus {
 	if stored == models.ResumeStatusUnlocked || subscribed {
 		return models.ResumeStatusUnlocked
@@ -37,9 +36,8 @@ func visibleStatus(stored models.ResumeStatus, subscribed bool) models.ResumeSta
 	return stored
 }
 
-// subscribed reports whether the viewer's subscription is live. A failed lookup
-// reads as "not subscribed": the stored status still stands, so the worst case
-// is a lock the viewer can lift by reloading.
+// subscribed reads a failed lookup as "not subscribed": the stored status still
+// stands, so the worst case is a lock a reload lifts.
 func (s *resumeService) subscribed(ctx context.Context, appID, viewerID string) bool {
 	sub, err := s.s.Get(ctx, appID, viewerID)
 	if err != nil && err != sql.ErrNoRows {
@@ -126,8 +124,7 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID, viewerID st
 	return relations, nil
 }
 
-// GetRelationFor is GetRelation with the viewer's subscription applied, so the
-// single resume and the list agree.
+// GetRelationFor is GetRelation with the viewer's subscription applied.
 func (s *resumeService) GetRelationFor(ctx context.Context, bundleID, viewerID string, opts ...models.GetRelationOptionFunc) (*models.ResumeRelation, error) {
 	app, err := s.a.GetByBundleID(ctx, bundleID)
 	if err != nil {

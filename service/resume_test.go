@@ -177,8 +177,7 @@ func TestListRelationsNonPositiveCountSkipsTheStore(t *testing.T) {
 }
 
 func TestVisibleStatusFollowsSubscription(t *testing.T) {
-	// 沒有覆蓋的話，訂閱中的徵才方在履歷列表會看到全鎖，而同一批履歷在聊天室
-	// 畫面是開的——同一個人同一時間兩個畫面互相矛盾。
+	// 沒有覆蓋的話，訂閱中的徵才方會在履歷列表看到全鎖，而同一批在聊天室是開的。
 	locked := []*models.ResumeRelation{
 		{ID: "r1", Status: models.ResumeStatusLocked},
 		{ID: "r2", Status: models.ResumeStatusUnlocked},

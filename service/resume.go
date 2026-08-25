@@ -124,8 +124,8 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID, viewerID st
 	return relations, nil
 }
 
-// GetRelationFor is GetRelation with the viewer's subscription applied.
-func (s *resumeService) GetRelationFor(ctx context.Context, bundleID, viewerID string, opts ...models.GetRelationOptionFunc) (*models.ResumeRelation, error) {
+// GetRelation is the store call with the viewer's subscription applied.
+func (s *resumeService) GetRelation(ctx context.Context, bundleID, viewerID string, opts ...models.GetRelationOptionFunc) (*models.ResumeRelation, error) {
 	app, err := s.a.GetByBundleID(ctx, bundleID)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)

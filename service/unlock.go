@@ -9,13 +9,10 @@ import (
 	"github.com/A-pen-app/logging"
 )
 
-// liftsLock reports whether the viewer sees past a stored lock: their own
-// application always, a live subscription otherwise. Both screens share it, so
-// they cannot answer differently. subscribed is deferred — an owner costs no
-// subscription lookup.
-func liftsLock(isOwner bool, subscribed func() bool) bool {
-	return isOwner || subscribed()
-}
+// Who sees past a stored lock, on the chat screen and the received-resume screen
+// alike: the owner of the application always, a live subscription otherwise. The
+// check is one "||" at each site; what has to be shared is subscribed below,
+// which decides what counts as live and which way a failed lookup falls.
 
 // subscribed reads a failed lookup as "not subscribed": the stored status
 // stands, so the worst case is a lock a reload lifts.

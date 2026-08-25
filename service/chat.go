@@ -192,8 +192,10 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 			jobSeekerID = ownerMap[*chat.BusinessCardSnapshotID]
 		}
 
-		if chat.AccessStatus != models.AccessStatusUnlocked &&
-			liftsLock(userID == jobSeekerID, func() bool { return subscribed(ctx, s.s, app.ID, userID) }) {
+		if userID == jobSeekerID {
+			chat.AccessStatus = models.AccessStatusUnlocked
+		} else if chat.AccessStatus != models.AccessStatusUnlocked &&
+			subscribed(ctx, s.s, app.ID, userID) {
 			chat.AccessStatus = models.AccessStatusUnlocked
 		}
 
@@ -341,8 +343,9 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 				jobSeekerID = bcOwnerMap[*chats[i].BusinessCardSnapshotID]
 			}
 
-			if chats[i].AccessStatus != models.AccessStatusUnlocked &&
-				liftsLock(userID == jobSeekerID, func() bool { return isSubscribed }) {
+			if userID == jobSeekerID {
+				chats[i].AccessStatus = models.AccessStatusUnlocked
+			} else if chats[i].AccessStatus != models.AccessStatusUnlocked && isSubscribed {
 				chats[i].AccessStatus = models.AccessStatusUnlocked
 			}
 

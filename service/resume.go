@@ -27,11 +27,11 @@ func NewResume(r store.Resume, a store.App, c store.Chat, s store.Subscription) 
 	}
 }
 
-// visibleStatus applies liftsLock to one relation; relation.UserID is its owner,
-// the counterpart of the chat rule's job seeker.
-func visibleStatus(relation *models.ResumeRelation, viewerID string, subscribed func() bool) models.ResumeStatus {
+// visibleStatus is the chat rule applied to a relation: relation.UserID is the
+// owner, the counterpart of the room's job seeker.
+func visibleStatus(relation *models.ResumeRelation, viewerID string, isSubscribed bool) models.ResumeStatus {
 	if relation.Status == models.ResumeStatusUnlocked ||
-		liftsLock(viewerID == relation.UserID, subscribed) {
+		viewerID == relation.UserID || isSubscribed {
 		return models.ResumeStatusUnlocked
 	}
 	return relation.Status
@@ -110,7 +110,7 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID, viewerID st
 	// Resolved once for the page, not per row.
 	isSubscribed := subscribed(ctx, s.s, app.ID, viewerID)
 	for _, relation := range relations {
-		relation.Status = visibleStatus(relation, viewerID, func() bool { return isSubscribed })
+		relation.Status = visibleStatus(relation, viewerID, isSubscribed)
 	}
 	return relations, nil
 }
@@ -126,7 +126,7 @@ func (s *resumeService) GetRelation(ctx context.Context, bundleID, viewerID stri
 	if err != nil {
 		return nil, err
 	}
-	relation.Status = visibleStatus(relation, viewerID, func() bool { return subscribed(ctx, s.s, app.ID, viewerID) })
+	relation.Status = visibleStatus(relation, viewerID, subscribed(ctx, s.s, app.ID, viewerID))
 	return relation, nil
 }
 

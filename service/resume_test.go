@@ -210,3 +210,19 @@ func TestVisibleStatusFollowsSubscription(t *testing.T) {
 		})
 	}
 }
+
+func TestOwnerAlwaysSeesTheirOwnResume(t *testing.T) {
+	// 單筆那支的授權允許兩種人：履歷主人與職缺作者。主人看自己的東西不該被鎖。
+	r := &fakeResumeStore{relations: []*models.ResumeRelation{
+		{ID: "r1", UserID: "seeker", Status: models.ResumeStatusLocked},
+	}}
+	s := NewResume(r, fakeAppStore{}, nil, fakeSubs{subscribed: false})
+
+	got, err := s.ListRelations(context.Background(), "com.yoku.apen", "seeker", 0, 10)
+	if err != nil {
+		t.Fatalf("ListRelations: %v", err)
+	}
+	if got[0].Status != models.ResumeStatusUnlocked {
+		t.Errorf("owner sees %v, want unlocked", got[0].Status)
+	}
+}

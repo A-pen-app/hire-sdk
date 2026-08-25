@@ -27,24 +27,15 @@ func NewResume(r store.Resume, a store.App, c store.Chat, s store.Subscription) 
 	}
 }
 
-// visibleStatus is the resume's own status unless a subscription lifts it —
-// the same rule the chat list applies to the room.
-func visibleStatus(stored models.ResumeStatus, subscribed bool) models.ResumeStatus {
-	if stored == models.ResumeStatusUnlocked || subscribed {
+// visibleStatus applies the shared rule to one relation: its owner always sees
+// their own resume, a subscription lifts every lock, otherwise the stored status
+// stands.
+func visibleStatus(relation *models.ResumeRelation, viewerID string, subscribed bool) models.ResumeStatus {
+	if relation.Status == models.ResumeStatusUnlocked ||
+		liftsLock(viewerID == relation.UserID, subscribed) {
 		return models.ResumeStatusUnlocked
 	}
-	return stored
-}
-
-// subscribed reads a failed lookup as "not subscribed": the stored status still
-// stands, so the worst case is a lock a reload lifts.
-func (s *resumeService) subscribed(ctx context.Context, appID, viewerID string) bool {
-	sub, err := s.s.Get(ctx, appID, viewerID)
-	if err != nil && err != sql.ErrNoRows {
-		logging.Errorw(ctx, "failed to get subscription", "err", err, "appID", appID, "viewerID", viewerID)
-		return false
-	}
-	return sub != nil && sub.Status.HasOneOf(models.SubscriptionSubscribed)
+	return relation.Status
 }
 
 func (s *resumeService) Patch(ctx context.Context, bundleID, userID string, resume *models.ResumeContent) error {
@@ -117,9 +108,9 @@ func (s *resumeService) ListRelations(ctx context.Context, bundleID, viewerID st
 		logging.Errorw(ctx, "failed to list resume relations", "err", err, "appID", app.ID)
 		return nil, err
 	}
-	subscribed := s.subscribed(ctx, app.ID, viewerID)
+	isSubscribed := subscribed(ctx, s.s, app.ID, viewerID)
 	for _, relation := range relations {
-		relation.Status = visibleStatus(relation.Status, subscribed)
+		relation.Status = visibleStatus(relation, viewerID, isSubscribed)
 	}
 	return relations, nil
 }
@@ -135,7 +126,7 @@ func (s *resumeService) GetRelation(ctx context.Context, bundleID, viewerID stri
 	if err != nil {
 		return nil, err
 	}
-	relation.Status = visibleStatus(relation.Status, s.subscribed(ctx, app.ID, viewerID))
+	relation.Status = visibleStatus(relation, viewerID, subscribed(ctx, s.s, app.ID, viewerID))
 	return relation, nil
 }
 

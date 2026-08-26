@@ -1,0 +1,101 @@
+package service
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/A-pen-app/hire-sdk/models"
+	"github.com/A-pen-app/hire-sdk/store"
+)
+
+type fakeApps struct{ store.App }
+
+func (fakeApps) GetByBundleID(context.Context, string) (*models.App, error) {
+	return &models.App{ID: "app"}, nil
+}
+
+// fakeSubStore records what Update was asked to write.
+type fakeSubStore struct {
+	store.Subscription
+
+	called    bool
+	gotStatus models.SubscriptionStatus
+	gotExpiry *time.Time
+}
+
+func (f *fakeSubStore) Update(_ context.Context, _, _ string, status models.SubscriptionStatus, expiresAt *time.Time) error {
+	f.called = true
+	f.gotStatus = status
+	f.gotExpiry = expiresAt
+	return nil
+}
+
+func TestSubscriptionUpdate_Expiry(t *testing.T) {
+	future := time.Now().Add(24 * time.Hour)
+	past := time.Now().Add(-24 * time.Hour)
+
+	tests := []struct {
+		name       string
+		status     models.SubscriptionStatus
+		expiredAt  *time.Time
+		wantErr    error
+		wantStatus models.SubscriptionStatus
+		wantExpiry *time.Time
+	}{
+		{
+			name:      "subscribed without expiry is rejected",
+			status:    models.SubscriptionSubscribed,
+			expiredAt: nil,
+			wantErr:   models.ErrorWrongParams,
+		},
+		{
+			name:       "paused without expiry is stored as is",
+			status:     models.SubscriptionSubscribed | models.SubscriptionPaused,
+			expiredAt:  nil,
+			wantStatus: models.SubscriptionSubscribed | models.SubscriptionPaused,
+			wantExpiry: nil,
+		},
+		{
+			name:       "subscribed with future expiry is stored as is",
+			status:     models.SubscriptionSubscribed,
+			expiredAt:  &future,
+			wantStatus: models.SubscriptionSubscribed,
+			wantExpiry: &future,
+		},
+		{
+			name:       "subscribed with past expiry becomes none",
+			status:     models.SubscriptionSubscribed,
+			expiredAt:  &past,
+			wantStatus: models.SubscriptionNone,
+			wantExpiry: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := &fakeSubStore{}
+			svc := NewSubscription(fakeApps{}, st)
+
+			err := svc.Update(context.Background(), "bundle", "user", tt.status, tt.expiredAt)
+			if err != tt.wantErr {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				if st.called {
+					t.Fatal("store must not be written on rejection")
+				}
+				return
+			}
+			if !st.called {
+				t.Fatal("store was not written")
+			}
+			if st.gotStatus != tt.wantStatus {
+				t.Errorf("status = %d, want %d", st.gotStatus, tt.wantStatus)
+			}
+			if (st.gotExpiry == nil) != (tt.wantExpiry == nil) || (st.gotExpiry != nil && !st.gotExpiry.Equal(*tt.wantExpiry)) {
+				t.Errorf("expiry = %v, want %v", st.gotExpiry, tt.wantExpiry)
+			}
+		})
+	}
+}

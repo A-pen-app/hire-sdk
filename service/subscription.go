@@ -57,12 +57,13 @@ func (s *subscriptionService) Update(ctx context.Context, bundleID, userID strin
 	}
 
 	if status.HasOneOf(models.SubscriptionSubscribed) {
-		if expiredAt == nil {
+		// A paused subscription has no end date until it resumes.
+		if expiredAt == nil && !status.HasOneOf(models.SubscriptionPaused) {
 			logging.Errorw(ctx, "expired at is nil", "app_id", app.ID, "user_id", userID)
 			return models.ErrorWrongParams
 		}
 
-		if expiredAt.Before(time.Now()) {
+		if expiredAt != nil && expiredAt.Before(time.Now()) {
 			status = (status &^ models.SubscriptionSubscribed) | models.SubscriptionNone
 			expiredAt = nil
 		}

@@ -290,6 +290,8 @@ type DisplayUser struct {
 	Character   *string `json:"character"`
 	IsAnonymous bool    `json:"is_anonymous"`
 	PushToken   *string `json:"-"`
+	// Name and picture are not masked, so this is the only sign they are gone.
+	DeletedAt *time.Time `json:"deleted_at" example:"2026-08-20T03:12:44Z"`
 }
 
 type Money struct {

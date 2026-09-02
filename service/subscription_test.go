@@ -15,13 +15,19 @@ func (fakeApps) GetByBundleID(context.Context, string) (*models.App, error) {
 	return &models.App{ID: "app"}, nil
 }
 
-// fakeSubStore records what Update was asked to write.
+// fakeSubStore answers Get with one stored row and records what Update was asked to write.
 type fakeSubStore struct {
 	store.Subscription
+
+	sub *models.UserSubscription
 
 	called    bool
 	gotStatus models.SubscriptionStatus
 	gotExpiry *time.Time
+}
+
+func (f *fakeSubStore) Get(context.Context, string, string) (*models.UserSubscription, error) {
+	return f.sub, nil
 }
 
 func (f *fakeSubStore) Update(_ context.Context, _, _ string, status models.SubscriptionStatus, expiresAt *time.Time) error {
@@ -95,6 +101,53 @@ func TestSubscriptionUpdate_Expiry(t *testing.T) {
 			}
 			if (st.gotExpiry == nil) != (tt.wantExpiry == nil) || (st.gotExpiry != nil && !st.gotExpiry.Equal(*tt.wantExpiry)) {
 				t.Errorf("expiry = %v, want %v", st.gotExpiry, tt.wantExpiry)
+			}
+		})
+	}
+}
+
+func TestSubscriptionGet_Expiry(t *testing.T) {
+	past := time.Now().Add(-24 * time.Hour)
+
+	tests := []struct {
+		name       string
+		stored     *models.UserSubscription
+		wantErr    bool
+		wantStatus models.SubscriptionStatus
+	}{
+		{
+			name:       "paused without expiry is returned as is",
+			stored:     &models.UserSubscription{Status: models.SubscriptionSubscribed | models.SubscriptionPaused},
+			wantStatus: models.SubscriptionSubscribed | models.SubscriptionPaused,
+		},
+		{
+			name:    "subscribed without expiry is an error",
+			stored:  &models.UserSubscription{Status: models.SubscriptionSubscribed},
+			wantErr: true,
+		},
+		{
+			name:       "subscribed with past expiry becomes none",
+			stored:     &models.UserSubscription{Status: models.SubscriptionSubscribed, ExpiresAt: &past},
+			wantStatus: models.SubscriptionNone,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewSubscription(fakeApps{}, &fakeSubStore{sub: tt.stored})
+
+			got, err := svc.Get(context.Background(), "bundle", "user")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("err = nil, want an error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if got.Status != tt.wantStatus {
+				t.Errorf("status = %d, want %d", got.Status, tt.wantStatus)
 			}
 		})
 	}

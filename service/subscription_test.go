@@ -114,6 +114,7 @@ func TestSubscriptionGet_Expiry(t *testing.T) {
 		stored     *models.UserSubscription
 		wantErr    bool
 		wantStatus models.SubscriptionStatus
+		wantExpiry *time.Time
 	}{
 		{
 			name:       "paused without expiry is returned as is",
@@ -129,6 +130,13 @@ func TestSubscriptionGet_Expiry(t *testing.T) {
 			name:       "subscribed with past expiry becomes none",
 			stored:     &models.UserSubscription{Status: models.SubscriptionSubscribed, ExpiresAt: &past},
 			wantStatus: models.SubscriptionNone,
+			wantExpiry: &past,
+		},
+		{
+			name:       "paused with past expiry drops subscribed but keeps paused",
+			stored:     &models.UserSubscription{Status: models.SubscriptionSubscribed | models.SubscriptionPaused, ExpiresAt: &past},
+			wantStatus: models.SubscriptionNone | models.SubscriptionPaused,
+			wantExpiry: &past,
 		},
 	}
 
@@ -148,6 +156,9 @@ func TestSubscriptionGet_Expiry(t *testing.T) {
 			}
 			if got.Status != tt.wantStatus {
 				t.Errorf("status = %d, want %d", got.Status, tt.wantStatus)
+			}
+			if (got.ExpiresAt == nil) != (tt.wantExpiry == nil) || (got.ExpiresAt != nil && !got.ExpiresAt.Equal(*tt.wantExpiry)) {
+				t.Errorf("expires at = %v, want %v", got.ExpiresAt, tt.wantExpiry)
 			}
 		})
 	}

@@ -62,6 +62,9 @@ type BusinessCardService interface {
     // Get user's business card content
     Get(ctx context.Context, bundleID, userID string) (*models.BusinessCardContent, error)
 
+    // Batch Get, keyed by user ID; users without a card are absent
+    List(ctx context.Context, bundleID string, userIDs []string) (map[string]*models.BusinessCardContent, error)
+
     // Create or update business card
     Update(ctx context.Context, bundleID, userID string, card *models.BusinessCardContent) (*models.BusinessCardContent, error)
 }
@@ -71,6 +74,11 @@ type BusinessCardService interface {
 - Common: real name
 - Doctor: position, departments
 - Pharmacist/Nurse: current organization, current job title
+
+**Batch Card Lookup** (one query per page; no resume fallback, unlike `Get`):
+```go
+cards, err := cardSvc.List(ctx, bundleID, userIDs) // map[userID]*BusinessCardContent
+```
 
 ### Chat Service
 

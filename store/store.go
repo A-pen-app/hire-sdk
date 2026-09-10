@@ -55,6 +55,7 @@ type Chat interface {
 
 type BusinessCard interface {
 	Get(ctx context.Context, appID, userID string) (*models.BusinessCard, error)
+	List(ctx context.Context, appID string, userIDs []string) ([]*models.BusinessCard, error)
 	Upsert(ctx context.Context, appID, userID string, card *models.BusinessCardContent) error
 	CreateSnapshot(ctx context.Context, appID, userID string, card *models.BusinessCardContent) (*models.BusinessCardSnapshot, error)
 	GetSnapshot(ctx context.Context, snapshotID string) (*models.BusinessCardSnapshot, error)

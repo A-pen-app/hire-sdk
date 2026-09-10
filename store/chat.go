@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/A-pen-app/hire-sdk/models"
@@ -14,8 +15,74 @@ import (
 	"github.com/lib/pq"
 )
 
+// chat_thread's hidden_at and cleared_at are added by hand, per environment, and this
+// library ships ahead of the DDL — see docs/chat_visibility.md. So archive and delete
+// ask the database whether they can be done at all instead of assuming it.
+//
+// This is what makes one build deployable to an environment that has the columns and to
+// one that does not, in either order and with no coordination. With no columns the SQL
+// never names them, every room reads as never-archived and never-cleared — exactly the
+// behaviour of the build that came before the feature — and the two write methods
+// return models.ErrorChatArchiveUnavailable, which callers answer as 501. The DDL can
+// then be applied underneath a running process, with no deploy and no restart, and
+// archive starts working within a minute of the ALTER.
+type columnProbe struct {
+	mu      sync.Mutex
+	present bool
+	lastTry time.Time
+}
+
+// columnRecheckInterval bounds how often a column-less environment re-asks. Once the
+// answer is yes it is never asked again: columns do not disappear from under a running
+// process.
+const columnRecheckInterval = time.Minute
+
+// has reports whether public.chat_thread carries every one of the named columns.
+//
+// A false answer is a real answer, not an error: the caller drops the columns out of the
+// SQL entirely. A probe that fails for any other reason also answers false, so a hiccup
+// in the catalog degrades the feature rather than the chat list.
+//
+// It reads pg_catalog rather than information_schema on purpose. information_schema only
+// shows columns the connecting role holds a privilege on, so a role that reads the table
+// through its owner's grants would be told the column does not exist and the feature
+// would stay silently off forever. pg_catalog answers what the database actually has.
+func (p *columnProbe) has(ctx context.Context, db *sqlx.DB, columns ...string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.present {
+		return true
+	}
+	if !p.lastTry.IsZero() && time.Since(p.lastTry) < columnRecheckInterval {
+		return false
+	}
+	p.lastTry = time.Now()
+
+	query := db.Rebind(`
+	SELECT count(*)
+	FROM pg_attribute a
+	JOIN pg_class c ON c.oid=a.attrelid
+	JOIN pg_namespace n ON n.oid=c.relnamespace
+	WHERE n.nspname='public' AND c.relname='chat_thread'
+		AND a.attname=ANY(?) AND a.attnum>0 AND NOT a.attisdropped`)
+
+	found := 0
+	if err := db.GetContext(ctx, &found, query, pq.Array(columns)); err != nil {
+		logging.Errorw(ctx, "probe chat_thread columns failed", "err", err, "columns", columns)
+		return false
+	}
+
+	// All or nothing: a half-applied ALTER is not a schema this code can run against.
+	p.present = found == len(columns)
+	return p.present
+}
+
 type chatStore struct {
 	db *sqlx.DB
+
+	// archive caches whether this environment can do archive and delete at all.
+	archive columnProbe
 }
 
 // NewChat returns an implementation of store.Chat
@@ -23,9 +90,18 @@ func NewChat(db *sqlx.DB) Chat {
 	return &chatStore{db: db}
 }
 
-func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*models.ChatRoom, error) {
-	chat := models.ChatRoom{}
-	query := `
+// archivable reports whether this environment's chat_thread has the archive columns.
+//
+// Both are required together: cleared_at without hidden_at would let a room be deleted
+// but never leave the list, which is not a state the rules describe.
+func (s *chatStore) archivable(ctx context.Context) bool {
+	return s.archive.has(ctx, s.db, "hidden_at", "cleared_at")
+}
+
+// chatBaseColumns and chatFrom build every room-shaped query in this file. Sharing them
+// means a room can never mean two different things depending on which query returned it,
+// and chatFrom is reused on its own by the chat list's cursor subquery.
+const chatBaseColumns = `
 	SELECT
 		CT.chat_id,
 		CT.sender_id,
@@ -43,12 +119,40 @@ func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*mod
 		C.business_card_snapshot_id,
 		C.access_status,
 		CT.hire_contact,
-		CT.name
+		CT.name`
+
+// chatColumns adds the archive columns only where they exist. Selecting a column that
+// is not there fails the whole query, and Get is the membership check every other chat
+// operation runs first, so naming them unconditionally would take the entire hiring chat
+// down on an environment that has not had the ALTER applied yet.
+//
+// Left out, HiddenAt and ClearedAt stay nil on every room, which every rule already
+// reads as "never archived" and "never deleted".
+func chatColumns(archivable bool) string {
+	if !archivable {
+		return chatBaseColumns
+	}
+	return chatBaseColumns + `,
+		CT.hidden_at,
+		CT.cleared_at`
+}
+
+// The trailing WHERE is deliberate: every caller appends its own conditions.
+const chatFrom = `
 	FROM public.chat_thread AS CT
 	JOIN public.chat AS C
 	ON CT.chat_id=C.id
-	WHERE C.id=? AND C.app_id=? AND CT.sender_id=?
-	`
+	WHERE `
+
+// Get returns one room as this user sees it.
+//
+// Deliberately unfiltered on hidden_at: archiving only removes a room from the list.
+// Opening it by direct link or from a notification has to keep working and keep showing
+// every message (CHAT-102). It is also the membership check the service layer relies on
+// — chat_thread is per-user, so no row means not a participant.
+func (s *chatStore) Get(ctx context.Context, appID, chatID, userID string) (*models.ChatRoom, error) {
+	chat := models.ChatRoom{}
+	query := chatColumns(s.archivable(ctx)) + chatFrom + `C.id=? AND C.app_id=? AND CT.sender_id=?`
 	values := []interface{}{
 		chatID,
 		appID,
@@ -137,10 +241,100 @@ func (s *chatStore) Pin(ctx context.Context, chatID, userID string, isPinned boo
 	return nil
 }
 
+// SetHidden archives or un-archives a chat room for one user (rule R1, 封存).
+//
+// Archiving writes hidden_at and drops the room's unread count to zero (rule R3): the
+// room leaves the list and there is no archived tab to open it from, so a surviving
+// unread count could never be cleared. Un-archiving only clears the flag — it does not
+// restore the count, because those messages have been marked read.
+//
+// Nothing else is touched. The messages stay, and Get deliberately does not filter on
+// hidden_at, so opening the room by direct link or from a notification still shows the
+// full history (CHAT-102).
+func (s *chatStore) SetHidden(ctx context.Context, chatID, userID string, hidden bool) error {
+	// Writing the column is the one thing that cannot degrade: without it there is
+	// nowhere to record the archive, so say so instead of letting Postgres answer with a
+	// 500-shaped "column does not exist".
+	if !s.archivable(ctx) {
+		return models.ErrorChatArchiveUnavailable
+	}
+
+	query := `
+	UPDATE public.chat_thread
+	SET hidden_at=NULL
+	WHERE chat_id=? AND sender_id=?
+	`
+	if hidden {
+		query = `
+	UPDATE public.chat_thread
+	SET hidden_at=now(), unread_count=0
+	WHERE chat_id=? AND sender_id=?
+	`
+	}
+	query = s.db.Rebind(query)
+	if _, err := s.db.ExecContext(ctx, query, chatID, userID); err != nil {
+		logging.Errorw(ctx, "set chat thread hidden failed", "err", err, "chatID", chatID, "userID", userID, "hidden", hidden)
+		return err
+	}
+
+	return nil
+}
+
+// SetCleared deletes the conversation for one user (rule R2, 刪除對話): every message
+// already in the room stops being visible to them, while the other participant keeps
+// the lot.
+//
+// Delete is archive plus a cutoff, so hidden_at and cleared_at are written in the same
+// statement and therefore carry the *same* timestamp — now() is the transaction's
+// start time, not the statement's. The room leaves the list exactly as archiving would
+// and comes back the same way when a new message arrives, carrying only what arrived
+// after the cutoff.
+//
+// The cutoff is never reset; deleting again only moves it forward. The unread count is
+// zeroed for the same reason as in SetHidden (rule R3): deleting a room counts as
+// having read it.
+func (s *chatStore) SetCleared(ctx context.Context, chatID, userID string) error {
+	if !s.archivable(ctx) {
+		return models.ErrorChatArchiveUnavailable
+	}
+
+	query := `
+	UPDATE public.chat_thread
+	SET hidden_at=now(), cleared_at=now(), unread_count=0
+	WHERE chat_id=? AND sender_id=?
+	`
+	query = s.db.Rebind(query)
+	if _, err := s.db.ExecContext(ctx, query, chatID, userID); err != nil {
+		logging.Errorw(ctx, "clear chat thread failed", "err", err, "chatID", chatID, "userID", userID)
+		return err
+	}
+
+	return nil
+}
+
 // chatConditions is shared by GetChats and CountChats, so a count never
 // disagrees with the list it labels. Paging stays out of it.
-func chatConditions(appID, userID string, opt models.GetOption) ([]string, []interface{}) {
-	conditions := []string{"C.app_id=?", "CT.sender_id=?", "CT.status!=?"}
+func chatConditions(appID, userID string, opt models.GetOption, archivable bool) ([]string, []interface{}) {
+	// CT.status!=Deleted is the legacy "hidden forever" mark and stays as it is; the
+	// hidden_at clause next to it is rule R1 — an archived room is listed again as soon
+	// as a message arrives, and C.updated_at is written by the send path alone, so the
+	// comparison needs no extra write anywhere. Strictly greater: activity exactly at
+	// hidden_at leaves the room archived (CHAT-306).
+	//
+	// This is shared by GetChats, CountChats and CountByPostIDs on purpose: an archived
+	// room must be absent from every list query and from the counts that label them
+	// (CHAT-107).
+	//
+	// With no hidden_at column there is nothing to hide and the clause is left out
+	// entirely, which is the list this repo produced before the feature existed.
+	conditions := []string{
+		"C.app_id=?",
+		"CT.sender_id=?",
+		"CT.status!=?",
+	}
+	if archivable {
+		conditions = append(conditions, "(CT.hidden_at IS NULL OR C.updated_at>CT.hidden_at)")
+	}
 	values := []interface{}{appID, userID, models.Deleted}
 
 	if opt.IsOfficialRole {
@@ -199,49 +393,84 @@ func chatConditions(appID, userID string, opt models.GetOption) ([]string, []int
 	return conditions, values
 }
 
+// pinnedChatQuery returns every pinned room, unpaged. Pinning is a display flag, not a
+// page of results: the whole set is served on the first page and never again, which is
+// what keeps the cursor honest — see pagedChatQuery.
+//
+// "First page" cannot be spelled "the caller sent no cursor": GetChats defaults an empty
+// one to now+2s, so this layer never sees one. What identifies the first page is the
+// cursor sitting above the whole list — no listable room of this user has updated_at >=
+// it. A genuine page-2 cursor is the updated_at of a row the client was just served, so
+// that row satisfies >= and the pinned set is correctly left out. The comparison is
+// strict for the same reason the paging one is: >= would re-serve the pinned rooms on
+// every later page.
+//
+// The subquery that measures this reuses the aliases CT / C. The inner scope shadows the
+// outer one and references nothing from it, so the same condition strings serve both —
+// and they have to be the same conditions: measuring the cursor against a wider set
+// would let a room this caller cannot even see push the pinned rooms off their own first
+// page.
+func pinnedChatQuery(columns string, conditions []string, values []interface{}, next string) (string, []interface{}) {
+	firstPage := "TO_TIMESTAMP(?)>(SELECT COALESCE(MAX(C.updated_at), TO_TIMESTAMP(0))" +
+		chatFrom + strings.Join(conditions, " AND ") + ")"
+
+	pinned := append(append([]string{}, conditions...), "CT.is_pinned=true", firstPage)
+	args := append(append([]interface{}{}, values...), next)
+	args = append(args, values...)
+
+	return columns + chatFrom + strings.Join(pinned, " AND ") + " ORDER BY C.updated_at DESC", args
+}
+
+// pagedChatQuery pages the unpinned rooms, most recently active first, with `next` as a
+// keyset cursor on updated_at.
+//
+// The cursor carries updated_at alone, so it can only address a single-column sort key.
+// Pinned rooms are therefore excluded here and handled by pinnedChatQuery: every row this
+// query can return is unpinned, which makes the last row's updated_at an exact
+// description of how far the client has read. Sorting pinned rooms into these pages
+// instead — which is what `ORDER BY CT.is_pinned DESC, C.updated_at DESC` over a single
+// paged query used to do — breaks that in both directions: the cursor only moves
+// backwards, so a pinned-but-quiet room reappears at the top of page 1, 2, 3..., and once
+// the pinned rooms fill a page the cursor jumps back to an old timestamp and swallows
+// every unpinned room newer than it.
+//
+// The client still gets pinned-first ordering: GetChats concatenates the two.
+func pagedChatQuery(columns string, conditions []string, values []interface{}, next string, count int) (string, []interface{}) {
+	paged := append(append([]string{}, conditions...), "CT.is_pinned=false", "C.updated_at<TO_TIMESTAMP(?)")
+	args := append(append([]interface{}{}, values...), next, count)
+
+	return columns + chatFrom + strings.Join(paged, " AND ") + " ORDER BY C.updated_at DESC LIMIT ?", args
+}
+
+// GetChats returns one page of the user's chat list: every pinned room first, then the
+// unpinned ones by last activity, newest first.
+//
+// count sizes the unpinned page only, so the first response holds count rows plus
+// however many rooms the user has pinned.
 func (s *chatStore) GetChats(ctx context.Context, appID, userID string, next string, count int, opt models.GetOption) ([]*models.ChatRoom, error) {
-	chats := []*models.ChatRoom{}
 	if next == "" {
 		// +2 seconds to prevent the last chat is created at almost the same time with getting chats
 		next = strconv.FormatInt(time.Now().Unix()+2, 10)
 	}
-	query := `
-	SELECT
-		CT.chat_id,
-		CT.sender_id,
-		CT.receiver_id,
-		C.app_id,
-		C.last_message_id,
-		CT.unread_count,
-		CT.last_seen_at,
-		C.updated_at,
-		CT.status,
-		CT.control_flag,
-		C.created_at,
-		C.post_id,
-		CT.is_pinned,
-		C.business_card_snapshot_id,
-		C.access_status,
-		CT.hire_contact,
-		CT.name
-	FROM public.chat_thread AS CT
-	JOIN public.chat AS C
-	ON CT.chat_id=C.id
-	WHERE `
-	conditions, values := chatConditions(appID, userID, opt)
-	// Paging, not visibility.
-	conditions = append(conditions, "C.updated_at<TO_TIMESTAMP(?)")
-	values = append(values, next)
+	archivable := s.archivable(ctx)
+	columns := chatColumns(archivable)
+	conditions, values := chatConditions(appID, userID, opt, archivable)
 
-	query = query + strings.Join(conditions, " AND ") + " ORDER BY CT.is_pinned DESC, C.updated_at DESC LIMIT ?"
-	values = append(values, count)
+	chats := []*models.ChatRoom{}
+	query, args := pinnedChatQuery(columns, conditions, values, next)
+	if err := s.db.Select(&chats, s.db.Rebind(query), args...); err != nil {
+		logging.Errorw(ctx, "get pinned chat thread list failed", "err", err, "appID", appID, "userID", userID)
+		return nil, err
+	}
 
-	query = s.db.Rebind(query)
-	if err := s.db.Select(&chats, query, values...); err != nil {
+	unpinned := []*models.ChatRoom{}
+	query, args = pagedChatQuery(columns, conditions, values, next, count)
+	if err := s.db.Select(&unpinned, s.db.Rebind(query), args...); err != nil {
 		logging.Errorw(ctx, "get chat thread list failed", "err", err, "appID", appID, "userID", userID, "count", count)
 		return nil, err
 	}
-	return chats, nil
+
+	return append(chats, unpinned...), nil
 }
 
 func (s *chatStore) CountByPostIDs(ctx context.Context, appID, userID string, postIDs []string) (map[string]int, error) {
@@ -250,7 +479,7 @@ func (s *chatStore) CountByPostIDs(ctx context.Context, appID, userID string, po
 		return counts, nil
 	}
 
-	conditions, values := chatConditions(appID, userID, models.GetOption{})
+	conditions, values := chatConditions(appID, userID, models.GetOption{}, s.archivable(ctx))
 	conditions = append(conditions, "C.post_id=ANY(?)")
 	values = append(values, pq.Array(postIDs))
 
@@ -283,7 +512,7 @@ func (s *chatStore) CountByPostIDs(ctx context.Context, appID, userID string, po
 
 // CountChats counts what GetChats would list under the same options.
 func (s *chatStore) CountChats(ctx context.Context, appID, userID string, opt models.GetOption) (int, error) {
-	conditions, values := chatConditions(appID, userID, opt)
+	conditions, values := chatConditions(appID, userID, opt, s.archivable(ctx))
 
 	query := `
 	SELECT COUNT(*)
@@ -650,7 +879,12 @@ func (s *chatStore) GetMessage(ctx context.Context, messageID string) (*models.M
 	return &msg, nil
 }
 
-func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after time.Time) ([]*models.Message, error) {
+// GetNewMessages returns the messages of a room newer than `after`, as the owner of
+// clearedAt sees them.
+//
+// clearedAt is that caller's delete cutoff (rule R2) and nil when they never deleted
+// the room. It is applied here rather than after the query on purpose — see GetMessages.
+func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after time.Time, clearedAt *time.Time) ([]*models.Message, error) {
 
 	query := `
 	SELECT
@@ -665,13 +899,18 @@ func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after tim
 		media_ids,
 		reference_id	
 	FROM public.message
-	WHERE chat_id=? AND created_at>?
-	ORDER BY created_at DESC
-	`
+	WHERE chat_id=? AND created_at>?`
 	values := []interface{}{
 		chatID,
 		after,
 	}
+	if clearedAt != nil {
+		query += ` AND created_at>?`
+		values = append(values, *clearedAt)
+	}
+	query += `
+	ORDER BY created_at DESC
+	`
 	query = s.db.Rebind(query)
 	rows, err := s.db.Queryx(query, values...)
 	if err != nil {
@@ -704,7 +943,16 @@ func (s *chatStore) GetNewMessages(ctx context.Context, chatID string, after tim
 	return msgs, nil
 }
 
-func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string, count int) ([]*models.Message, error) {
+// GetMessages returns one page of a room's messages as the owner of clearedAt sees
+// them, newest first.
+//
+// clearedAt is that caller's delete cutoff (rule R2) and nil when they never deleted
+// the room. It belongs in the SQL rather than in a filter over the returned page: the
+// mobile clients decide whether older history exists by asking "did I get `count` rows
+// back?", so dropping rows after the fact makes a full page come back short and the
+// client silently stops paging. Filtered in the WHERE clause, a page of `count` rows is
+// always `count` rows the caller can see.
+func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string, count int, clearedAt *time.Time) ([]*models.Message, error) {
 
 	if next == "" {
 		// +2 seconds to prevent the last message is created at almost the same time with getting messages
@@ -723,15 +971,20 @@ func (s *chatStore) GetMessages(ctx context.Context, chatID string, next string,
 		media_ids,
 		reference_id
 	FROM public.message
-	WHERE chat_id=? AND created_at<TO_TIMESTAMP(?)
-	ORDER BY created_at DESC
-	LIMIT ?
-	`
+	WHERE chat_id=? AND created_at<TO_TIMESTAMP(?)`
 	values := []interface{}{
 		chatID,
 		next,
-		count,
 	}
+	if clearedAt != nil {
+		query += ` AND created_at>?`
+		values = append(values, *clearedAt)
+	}
+	query += `
+	ORDER BY created_at DESC
+	LIMIT ?
+	`
+	values = append(values, count)
 	query = s.db.Rebind(query)
 	rows, err := s.db.Queryx(query, values...)
 	if err != nil {

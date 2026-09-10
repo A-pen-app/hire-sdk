@@ -163,7 +163,7 @@ func (s *chatService) Get(ctx context.Context, bundleID, chatID, userID string) 
 	chat.HireStatus = &hireStatus
 
 	if msgID := chat.LastMessageID; msgID != nil {
-		msg, err := s.aggregateLastMessage(ctx, userID, *msgID, false)
+		msg, err := s.aggregateLastMessage(ctx, userID, *msgID, false, chat.ClearedAt)
 		if err != nil {
 			logging.Errorw(ctx, "aggregate last message failed", "err", err, "msgID", *msgID)
 		} else {
@@ -326,7 +326,7 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 		chats[i].HireStatus = &hireStatus
 
 		if msgID := chats[i].LastMessageID; msgID != nil {
-			msg, err := s.aggregateLastMessage(ctx, userID, *msgID, true)
+			msg, err := s.aggregateLastMessage(ctx, userID, *msgID, true, chats[i].ClearedAt)
 			if err != nil {
 				logging.Errorw(ctx, "aggregate last message failed", "err", err, "msgID", *msgID)
 			} else {
@@ -377,11 +377,24 @@ func (s *chatService) GetChats(ctx context.Context, bundleID, userID string, nex
 		}
 	}
 
+	// The store serves every pinned room on the first page and pages only the unpinned
+	// ones, so `count` sizes the unpinned tail and the cursor has to be read off that
+	// tail alone. Counting the pinned rooms into it would move the cursor backwards past
+	// unpinned rooms the client has never been served. Pinned rooms only ever come from
+	// the store's unpaged query, so they are exactly the IsPinned rows and they all sit
+	// at the front.
+	pinned := 0
+	for _, chat := range chats {
+		if chat.IsPinned {
+			pinned++
+		}
+	}
+
 	next = ""
 	n := len(chats)
-	if n > count {
-		next = strconv.FormatInt(chats[count-1].UpdatedAt.Unix(), 10)
-		n = count
+	if n-pinned > count {
+		next = strconv.FormatInt(chats[pinned+count-1].UpdatedAt.Unix(), 10)
+		n = pinned + count
 	}
 	return chats[:n], next, nil
 }
@@ -394,8 +407,10 @@ func (s *chatService) FetchNewMessages(ctx context.Context, bundleID, userID, ch
 		return nil, err
 	}
 
-	// check ownership
-	if _, err := s.c.Get(ctx, app.ID, chatID, userID); err != nil {
+	// The ownership check doubles as the source of the caller's delete cutoff: their own
+	// chat_thread row is both "is a participant" and "how far back their history goes".
+	chat, err := s.c.Get(ctx, app.ID, chatID, userID)
+	if err != nil {
 		logging.Errorw(ctx, "failed to verify chat ownership", "err", err, "appID", app.ID, "chatID", chatID, "userID", userID)
 		return nil, err
 	}
@@ -407,7 +422,7 @@ func (s *chatService) FetchNewMessages(ctx context.Context, bundleID, userID, ch
 		return nil, models.ErrorNotAllowed
 	}
 
-	nonFilteredMsgs, err := s.c.GetNewMessages(ctx, chatID, lastMsg.CreatedAt)
+	nonFilteredMsgs, err := s.c.GetNewMessages(ctx, chatID, lastMsg.CreatedAt, chat.ClearedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -423,8 +438,10 @@ func (s *chatService) GetChatMessages(ctx context.Context, bundleID, userID, cha
 		return nil, "", err
 	}
 
-	// check ownership
-	if _, err := s.c.Get(ctx, app.ID, chatID, userID); err != nil {
+	// Same as FetchNewMessages: this is the membership check and the source of the
+	// caller's delete cutoff at once.
+	chat, err := s.c.Get(ctx, app.ID, chatID, userID)
+	if err != nil {
 		logging.Errorw(ctx, "failed to verify chat ownership", "err", err, "appID", app.ID, "chatID", chatID, "userID", userID)
 		return nil, "", err
 	}
@@ -433,7 +450,7 @@ func (s *chatService) GetChatMessages(ctx context.Context, bundleID, userID, cha
 	}
 
 	// get one more element for determining next cursor
-	nonFilteredMsgs, err := s.c.GetMessages(ctx, chatID, next, count+1)
+	nonFilteredMsgs, err := s.c.GetMessages(ctx, chatID, next, count+1, chat.ClearedAt)
 	if err != nil {
 		logging.Errorw(ctx, "failed to get messages", "err", err, "chatID", chatID, "count", count+1)
 		return nil, "", err
@@ -532,6 +549,69 @@ func (s *chatService) UnsendMessage(ctx context.Context, bundleID, userID, messa
 	return nil
 }
 
+// requireMembership resolves the app and returns the caller's own chat_thread row.
+//
+// chat_thread is per-user, so "has a row" is exactly "is a participant": a caller with
+// none is not in the room and the store's sql.ErrNoRows is the right answer, before any
+// visibility rule is considered. Every room-scoped write below goes through here rather
+// than writing by chat id alone, which would let any signed-in user archive, delete or
+// pin a room whose id they can guess.
+func (s *chatService) requireMembership(ctx context.Context, bundleID, userID, chatID string) (*models.ChatRoom, error) {
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return nil, err
+	}
+
+	chat, err := s.c.Get(ctx, app.ID, chatID, userID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to verify chat ownership", "err", err, "appID", app.ID, "chatID", chatID, "userID", userID)
+		return nil, err
+	}
+	return chat, nil
+}
+
+// Archive hides a chat room from this user's list, or brings it back (封存).
+//
+// Archiving touches no message: the room simply stops being listed until a new message
+// from either side arrives, and opening it directly still shows the full history. The
+// room is also marked read, because there is no archived tab from which a surviving
+// unread count could ever be cleared. One-sided — the other participant is unaffected.
+// See docs/chat_visibility.md.
+func (s *chatService) Archive(ctx context.Context, bundleID, userID, chatID string, archived bool) error {
+	if _, err := s.requireMembership(ctx, bundleID, userID, chatID); err != nil {
+		return err
+	}
+	return s.c.SetHidden(ctx, chatID, userID, archived)
+}
+
+// Clear deletes the conversation for this user only (刪除對話).
+//
+// Every message already in the room stops being visible to the caller; the other
+// participant keeps every one. The room also leaves the caller's list exactly as
+// archiving would, and comes back when a new message arrives — carrying only what
+// arrived after the cutoff. Deleting again only moves the cutoff forward; it is never
+// reset. See docs/chat_visibility.md.
+func (s *chatService) Clear(ctx context.Context, bundleID, userID, chatID string) error {
+	if _, err := s.requireMembership(ctx, bundleID, userID, chatID); err != nil {
+		return err
+	}
+	return s.c.SetCleared(ctx, chatID, userID)
+}
+
+// Pin pins a chat room to the top of this user's list, or unpins it (置頂).
+//
+// Display only: no message, unread count or visibility rule is touched. GetChats
+// already orders on CT.is_pinned before C.updated_at, so the caller gets the list
+// pinned-first, and the flag is returned on every room as is_pinned. One-sided, like
+// Archive. Idempotent: setting the same value twice is a no-op.
+func (s *chatService) Pin(ctx context.Context, bundleID, userID, chatID string, pinned bool) error {
+	if _, err := s.requireMembership(ctx, bundleID, userID, chatID); err != nil {
+		return err
+	}
+	return s.c.Pin(ctx, chatID, userID, pinned)
+}
+
 func (s *chatService) GetBusinessCardOnly(ctx context.Context, bundleID string, before time.Duration) ([]*models.BusinessCardChat, error) {
 	app, err := s.a.GetByBundleID(ctx, bundleID)
 	if err != nil {
@@ -599,22 +679,23 @@ func toResumeStatus(status models.AccessStatus) models.ResumeStatus {
 }
 
 // aggregateLastMessage processes the last message with business logic (without user info)
-func (s *chatService) aggregateLastMessage(ctx context.Context, userID string, msgID string, isInjectContent bool) (*models.Message, error) {
+//
+// clearedAt is the viewer's delete cutoff (rule R2), nil when they never deleted the
+// room. The room's last_message_id points straight at a row, so this is the one read
+// path with no room-scoped query to hang the cutoff off — it has to be applied here.
+// A preview from before the cutoff is not "an empty preview", it is a message this
+// viewer no longer has, so it comes back as nil exactly like a deleted or unsent one.
+func (s *chatService) aggregateLastMessage(ctx context.Context, userID string, msgID string, isInjectContent bool, clearedAt *time.Time) (*models.Message, error) {
 	msg, err := s.c.GetMessage(ctx, msgID)
 	if err != nil {
 		logging.Errorw(ctx, "get last message failed", "err", err, "msgID", msgID)
 		return nil, err
 	}
 
-	status := msg.Status
-	switch {
-	case status.HasOneOf(models.DeletedBySender) && userID == msg.SenderID,
-		status.HasOneOf(models.DeletedByReceiver) && userID != msg.SenderID,
-		status.HasOneOf(models.Unsent):
+	if !models.IsLastMessageVisibleFor(msg, userID, clearedAt) {
 		return nil, nil
-	default:
-		msg.Status = models.Normal
 	}
+	msg.Status = models.Normal
 
 	if isInjectContent {
 		if err := s.injectContent(ctx, userID, msg, false); err != nil {

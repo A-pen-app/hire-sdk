@@ -231,6 +231,18 @@ type ChatRoom struct {
 	// 這一側自己取的名稱，對方看不到。nil 表示沒設過，是否退回 Receiver.Name 由呼叫端決定。
 	Name *string `json:"name" db:"name"`
 
+	// HiddenAt is when this side archived the room (封存): nil means never. The room
+	// stops being listed until the room's own updated_at passes it, which is what a
+	// new message does — see IsChatHidden and docs/chat_visibility.md. Per-user, so
+	// archiving never affects the other participant, and never exposed to the client:
+	// the room simply stops appearing.
+	HiddenAt *time.Time `json:"-" db:"hidden_at"`
+
+	// ClearedAt is this side's delete cutoff (刪除對話): only messages created after
+	// it are visible to them, while the other participant keeps every one. nil means
+	// never deleted. Never reset — deleting again only moves it forward.
+	ClearedAt *time.Time `json:"-" db:"cleared_at"`
+
 	//chat
 	AppID                  string                `json:"-" db:"app_id"`
 	CreatedAt              time.Time             `json:"created_at" db:"created_at" example:"2023-10-01T04:00:00Z"`

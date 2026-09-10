@@ -26,6 +26,12 @@ type Chat interface {
 	FetchNewMessages(ctx context.Context, bundleID, userID, chatID string, lastMessageID string) ([]*models.Message, error)
 	SendMessage(ctx context.Context, bundleID, userID, chatID string, options ...models.SendOptionFunc) (*models.Message, error)
 	UnsendMessage(ctx context.Context, bundleID, userID, messageID string) error
+	// Archive hides a room from this user's list, or brings it back (封存).
+	Archive(ctx context.Context, bundleID, userID, chatID string, archived bool) error
+	// Clear deletes the conversation for this user only (刪除對話).
+	Clear(ctx context.Context, bundleID, userID, chatID string) error
+	// Pin pins a room to the top of this user's list, or unpins it (置頂).
+	Pin(ctx context.Context, bundleID, userID, chatID string, pinned bool) error
 	GetBusinessCardOnly(ctx context.Context, bundleID string, before time.Duration) ([]*models.BusinessCardChat, error)
 }
 

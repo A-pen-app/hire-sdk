@@ -166,8 +166,16 @@ implementations.
 ### This is a library, not a service
 
 `hire-sdk` has no `main` and no HTTP layer. It is imported by `apen-api`, `nurse-api`
-and `phar-api` (all three currently pin `v1.3.18`); the routes live in each API repo's
+and `phar-api` (all three currently pin `v1.3.32`); the routes live in each API repo's
 `api/hire.go`.
+
+> **The routes for archive and delete do not exist yet.** The library side has landed
+> (see the status note under "What needs to change"), but nothing can reach it until a
+> tag carrying it is cut and the three API repos add
+> `hg.PATCH("chats/:chat_id/archive", ...)` and `hg.DELETE("chats/:chat_id/messages", ...)`
+> next to the existing `chats/:chat_id/pin`. Pinning already has its route and now also
+> has a service method — `api/hire.go` still calls `store.Chat.Pin` directly, which keeps
+> working; new callers should prefer `service.Chat.Pin`, which does the membership check.
 
 **Release flow for any change here:**
 
@@ -216,6 +224,47 @@ ALTER TABLE public.chat_thread
     ADD COLUMN IF NOT EXISTS cleared_at timestamptz;
 ```
 
+> **Status:** applied on dev as of 2026-09-10 — `\d public.chat_thread` in the `hiring`
+> DB shows both, as `timestamp with time zone`. Prod has to be checked separately, though
+> the code no longer depends on the answer — see below.
+
+#### The DDL and the deploy are in no particular order
+
+Both columns are *queried*, not merely scanned, and naming a column that is not there
+fails the whole statement. `Get` is the membership check every other chat operation runs
+first, so a build that named them unconditionally would take the entire hiring chat down
+on an environment that has not had the `ALTER` applied, not just archive.
+
+So the store asks instead of assuming, the way `apen-api`'s `store.hasPinColumn` does.
+`columnProbe` reads `pg_catalog` once (re-asking at most once a minute while the answer is
+no) and the query builders take the answer as a parameter:
+
+| | with the columns | without them |
+|---|---|---|
+| `chatColumns` | selects them | leaves them out; `HiddenAt` / `ClearedAt` read nil |
+| `chatConditions` | carries R1 | leaves R1 out |
+| `GetMessages` / `GetNewMessages` | apply the cutoff | `clearedAt` is nil, so no cutoff clause |
+| `SetHidden` / `SetCleared` | write | `models.ErrorChatArchiveUnavailable`, which the API repos answer as **501** |
+
+Degraded, every read path produces exactly the queries this repo produced before the
+feature existed. So the tag can be rolled out first and the DDL applied underneath a
+running process at any time, with no deploy and no restart.
+
+It reads `pg_catalog` rather than `information_schema` on purpose: `information_schema`
+only shows columns the connecting role holds a privilege on, so a role reading the table
+through its owner's grants would be told the column does not exist and archive would stay
+silently off forever. phar's prod `chat_thread` is exactly that shape.
+
+`is_pinned` needs no probe here: it has existed for as long as pinning has shipped, and
+`GetChats` has named it in its `SELECT` and `ORDER BY` since before this work.
+
+Note the mismatch that comes out of that: `chat.updated_at` and `message.created_at` are
+`timestamp **without** time zone`, so `C.updated_at>CT.hidden_at` and
+`created_at>:cleared_at` are mixed comparisons. Postgres resolves them by reading the
+naked timestamp in the session's `TimeZone`, which is `UTC` on this instance — the same
+zone the naked columns are written in — so the comparisons are exact. They would stop
+being exact if a connection ever set `TimeZone` to something else.
+
 ### Why not reuse `status`
 
 `chat_thread.status` (`models.ChatAnnotation`) already has `None` / `Todo` / `Done` /
@@ -236,6 +285,31 @@ So archive and delete get their own columns. The existing `status != Deleted` co
 stays as it is.
 
 ### What needs to change
+
+> **Status:** archive, delete and pin have all landed in this repo, except the routes —
+> see the note under "This is a library, not a service". `models/chat_visibility.go`
+> holds the R1 / R2 pure functions, `store.Chat` gained `SetHidden` / `SetCleared` and a
+> `clearedAt` argument on `GetMessages` / `GetNewMessages`, `chatConditions` carries R1
+> (so `GetChats`, `CountChats` and `CountByPostIDs` all hide archived rooms, CHAT-107),
+> and `service.Chat` gained `Archive` / `Clear` / `Pin`, each doing the `GetByBundleID` +
+> `s.c.Get` membership check. `aggregateLastMessage` takes the cutoff and returns nil for
+> a preview from before it.
+>
+> **Pin came with a paging fix.** `GetChats` used to be one query ordered
+> `CT.is_pinned DESC, C.updated_at DESC` while paging on an `updated_at` cursor. Those
+> two cannot coexist: the cursor only moves backwards, so a pinned-but-quiet room
+> reappeared at the top of every page, and once the pinned rooms filled a page the cursor
+> jumped back to their timestamp and swallowed every unpinned room newer than it. It is
+> now two queries — `pinnedChatQuery` (every pinned room, unpaged, first page only) and
+> `pagedChatQuery` (the unpinned page) — which is the shape `apen-api` already uses.
+> `count` therefore sizes the unpinned tail only, and `service.GetChats` reads the next
+> cursor off that tail rather than off the whole slice.
+>
+> **Still open:** the R4 rendering change in the last row of this table. `aggregateMessages`
+> still `continue`s on a per-message delete instead of keeping the row and marking it
+> unsent, so the paging bug R4 describes is still here. It is a visible change to what
+> the message-history endpoint returns, so it was deliberately left out of the
+> archive / delete / pin work rather than folded into it.
 
 | Layer | File : location | Change |
 |---|---|---|

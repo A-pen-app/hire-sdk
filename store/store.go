@@ -35,14 +35,16 @@ type Chat interface {
 	GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error)
 	Read(ctx context.Context, userID, chatID string) error
 	GetMessage(ctx context.Context, messageID string) (*models.Message, error)
-	GetMessages(ctx context.Context, chatID string, next string, count int) ([]*models.Message, error)
-	GetNewMessages(ctx context.Context, chatID string, after time.Time) ([]*models.Message, error)
+	GetMessages(ctx context.Context, chatID string, next string, count int, clearedAt *time.Time) ([]*models.Message, error)
+	GetNewMessages(ctx context.Context, chatID string, after time.Time, clearedAt *time.Time) ([]*models.Message, error)
 	GetFirstMessages(ctx context.Context, opt []models.FirstMessageOption) (map[string]*models.Message, error)
 	AddMessage(ctx context.Context, userID, chatID, receiverID string, typ models.MessageType, body *string, mediaIDs []string, replyToMessageID *string, referenceID *string) (string, error)
 	AddMessages(ctx context.Context, userID, chatID, receiverID string, msgs []*models.Message) error
 	EditMessage(ctx context.Context, messageID string, newStatus models.MessageStatus) error
 	Annotate(ctx context.Context, chatID, userID string, status models.ChatAnnotation) error
 	Pin(ctx context.Context, chatID, userID string, isPinned bool) error
+	SetHidden(ctx context.Context, chatID, userID string, hidden bool) error
+	SetCleared(ctx context.Context, chatID, userID string) error
 	UpdateHireContact(ctx context.Context, chatID string, userID string, contact *models.HireContact) error
 	UpdateName(ctx context.Context, chatID string, userID string, name *string) error
 	UpdateBusinessCardSnapshotID(ctx context.Context, chatID, snapshotID string) error

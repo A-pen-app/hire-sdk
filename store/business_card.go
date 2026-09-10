@@ -50,6 +50,33 @@ func (s *businessCard) Get(ctx context.Context, appID, userID string) (*models.B
 	return &record, nil
 }
 
+// List returns the given users' cards in one query; users without a card are absent.
+func (s *businessCard) List(ctx context.Context, appID string, userIDs []string) ([]*models.BusinessCard, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+
+	query := `
+	SELECT
+		id,
+		app_id,
+		user_id,
+		content,
+		created_at,
+		updated_at
+	FROM public.business_card
+	WHERE app_id = ? AND user_id = ANY(?)
+	`
+	query = s.db.Rebind(query)
+
+	var cards []*models.BusinessCard
+	if err := s.db.SelectContext(ctx, &cards, query, appID, pq.Array(userIDs)); err != nil {
+		logging.Errorw(ctx, "failed to list business cards", "err", err, "appID", appID, "userIDs", userIDs)
+		return nil, err
+	}
+	return cards, nil
+}
+
 // Upsert writes the user's business card. PreferredLocations is dual-written:
 // when the card carries a non-nil value, the user's resume (if any) gets its
 // preferred_locations replaced in the same transaction so the two surfaces

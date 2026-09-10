@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCountChatsUnreadRooms(t *testing.T) {
-	conn := &recordingConnector{rows: [][]driver.Value{{int64(3)}}}
+	conn := &recordingConnector{columns: []string{"count"}, rows: [][]driver.Value{{int64(3)}}}
 	db := sqlx.NewDb(sql.OpenDB(conn), "postgres")
 	defer db.Close()
 
@@ -74,7 +74,8 @@ func TestCountChatsUnreadRooms(t *testing.T) {
 // 這層沒有 DB 測試基礎建設，與其為了一支查詢引進 mock 套件，不如記下真正送出去的
 // SQL 與參數。
 type recordingConnector struct {
-	rows [][]driver.Value
+	columns []string
+	rows    [][]driver.Value
 
 	query string
 	args  []driver.Value
@@ -96,7 +97,7 @@ func (c *recordingConn) QueryContext(ctx context.Context, query string, args []d
 	for _, arg := range args {
 		c.c.args = append(c.c.args, arg.Value)
 	}
-	return &recordingRows{values: c.c.rows}, nil
+	return &recordingRows{columns: c.c.columns, values: c.c.rows}, nil
 }
 
 func (c *recordingConn) Prepare(string) (driver.Stmt, error) {
@@ -110,11 +111,12 @@ func (c *recordingConn) Begin() (driver.Tx, error) {
 }
 
 type recordingRows struct {
-	values [][]driver.Value
-	next   int
+	columns []string
+	values  [][]driver.Value
+	next    int
 }
 
-func (r *recordingRows) Columns() []string { return []string{"count"} }
+func (r *recordingRows) Columns() []string { return r.columns }
 
 func (r *recordingRows) Close() error { return nil }
 

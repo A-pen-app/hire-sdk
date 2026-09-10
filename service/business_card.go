@@ -62,6 +62,36 @@ func (s *businessCardService) Get(ctx context.Context, bundleID, userID string) 
 	return &models.BusinessCardContent{}, nil
 }
 
+// List returns the given users' card content keyed by user ID; users without a
+// card are absent. Unlike Get there is no resume fallback: callers hydrate users
+// already known to hold a card.
+func (s *businessCardService) List(ctx context.Context, bundleID string, userIDs []string) (map[string]*models.BusinessCardContent, error) {
+	if len(userIDs) == 0 {
+		return map[string]*models.BusinessCardContent{}, nil
+	}
+
+	app, err := s.a.GetByBundleID(ctx, bundleID)
+	if err != nil {
+		logging.Errorw(ctx, "failed to get app by bundle ID", "err", err, "bundleID", bundleID)
+		return nil, err
+	}
+
+	cards, err := s.bc.List(ctx, app.ID, userIDs)
+	if err != nil {
+		logging.Errorw(ctx, "failed to list business cards", "err", err, "bundleID", bundleID)
+		return nil, err
+	}
+
+	contents := make(map[string]*models.BusinessCardContent, len(cards))
+	for _, card := range cards {
+		if card.Content == nil {
+			continue
+		}
+		contents[card.UserID] = card.Content
+	}
+	return contents, nil
+}
+
 // Update overwrites the user's business card. An existing resume gets its
 // preferred_locations synced inside the upsert transaction (see
 // store.BusinessCard.Upsert); if no resume exists, one is seeded from the

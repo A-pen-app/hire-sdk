@@ -31,6 +31,7 @@ type Chat interface {
 
 type BusinessCardService interface {
 	Get(ctx context.Context, bundleID, userID string) (*models.BusinessCardContent, error)
+	List(ctx context.Context, bundleID string, userIDs []string) (map[string]*models.BusinessCardContent, error)
 	Update(ctx context.Context, bundleID, userID string, card *models.BusinessCardContent) (*models.BusinessCardContent, error)
 }
 

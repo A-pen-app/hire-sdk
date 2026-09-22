@@ -449,7 +449,8 @@ type BusinessCardChat struct {
 
 type BusinessCardChatInfo struct {
 	SnapshotID string
-	PostID     string
+	// PostID is nil for a room opened without a post.
+	PostID *string
 }
 
 type FirstMessageOption struct {

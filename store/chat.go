@@ -1229,11 +1229,7 @@ func (s *chatStore) GetBusinessCardChatInfos(ctx context.Context, chatIDs []stri
 	m := make(map[string]*models.BusinessCardChatInfo, len(rows))
 	for _, r := range rows {
 		if r.SnapshotID != nil {
-			info := &models.BusinessCardChatInfo{SnapshotID: *r.SnapshotID}
-			if r.PostID != nil {
-				info.PostID = *r.PostID
-			}
-			m[r.ChatID] = info
+			m[r.ChatID] = &models.BusinessCardChatInfo{SnapshotID: *r.SnapshotID, PostID: r.PostID}
 		}
 	}
 	return m, nil

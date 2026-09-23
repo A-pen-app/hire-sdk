@@ -326,8 +326,9 @@ type GetOption struct {
 	Keyword        *string
 	// AwaitingReply also counts rooms nobody has spoken in yet.
 	AwaitingReply bool
-	// HasPost drops the official room, which every list open recreates.
-	HasPost bool
+	// RecruiterRooms keeps rooms bound to a post or holding a card sent to the
+	// viewer; the official room every list open recreates has neither.
+	RecruiterRooms bool
 	// ExcludeOwnApplications drops the rooms the viewer applied through.
 	ExcludeOwnApplications bool
 }
@@ -377,7 +378,7 @@ func ByKeyword(keyword string) GetOptionFunc {
 // user can be both a recruiter and a job seeker.
 func RecruitingRooms() GetOptionFunc {
 	return func(opt *GetOption) error {
-		opt.HasPost = true
+		opt.RecruiterRooms = true
 		opt.ExcludeOwnApplications = true
 		return nil
 	}

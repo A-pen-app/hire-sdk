@@ -398,3 +398,22 @@ func (r *recordingRows) Next(dest []driver.Value) error {
 	r.next++
 	return nil
 }
+
+// A card sent to a vendor opens a room with no post, and the recruiter console still
+// has to list it.
+func TestRecruitingRoomsKeepsCardRoomsWithoutAPost(t *testing.T) {
+	opt := models.GetOption{}
+	if err := models.RecruitingRooms()(&opt); err != nil {
+		t.Fatalf("option failed: %v", err)
+	}
+	conditions, _ := chatConditions("app-1", "user-1", opt, true)
+	query := strings.Join(conditions, " AND ")
+
+	if !strings.Contains(query, "(C.post_id IS NOT NULL OR C.business_card_snapshot_id IS NOT NULL)") {
+		t.Errorf("recruiting rooms drops the card rooms that carry no post:\n%s", query)
+	}
+	// Cards the viewer sent mark their own applications, which stay out.
+	if !strings.Contains(query, "public.business_card_snapshot BCS") {
+		t.Errorf("recruiting rooms no longer excludes the viewer's own applications:\n%s", query)
+	}
+}

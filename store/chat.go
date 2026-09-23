@@ -355,8 +355,8 @@ func chatConditions(appID, userID string, opt models.GetOption, archivable bool)
 			conditions = append(conditions, "CT.unread_count>0")
 		}
 	}
-	if opt.HasPost {
-		conditions = append(conditions, "C.post_id IS NOT NULL")
+	if opt.RecruiterRooms {
+		conditions = append(conditions, "(C.post_id IS NOT NULL OR C.business_card_snapshot_id IS NOT NULL)")
 	}
 	if opt.PostID != nil {
 		conditions = append(conditions, "C.post_id=?")

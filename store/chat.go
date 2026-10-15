@@ -531,18 +531,6 @@ func (s *chatStore) CountChats(ctx context.Context, appID, userID string, opt mo
 	return count, nil
 }
 
-// Deprecated: use CountChats with models.RecruitingRooms and models.Unread().
-// It has no official accounts to leave out, so their rooms are counted.
-func (s *chatStore) CountUnreadChats(ctx context.Context, appID, userID string) (int, error) {
-	opt := models.GetOption{}
-	for _, f := range []models.GetOptionFunc{models.RecruitingRooms(nil), models.Unread()} {
-		if err := f(&opt); err != nil {
-			return 0, err
-		}
-	}
-	return s.CountChats(ctx, appID, userID, opt)
-}
-
 func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error) {
 	opt := models.GetChatIDOption{}
 	for _, f := range opts {

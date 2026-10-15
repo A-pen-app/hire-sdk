@@ -355,8 +355,9 @@ func chatConditions(appID, userID string, opt models.GetOption, archivable bool)
 			conditions = append(conditions, "CT.unread_count>0")
 		}
 	}
-	if opt.RecruiterRooms {
-		conditions = append(conditions, "(C.post_id IS NOT NULL OR C.business_card_snapshot_id IS NOT NULL)")
+	if len(opt.ExcludeCounterparts) > 0 {
+		conditions = append(conditions, "CT.receiver_id<>ALL(?)")
+		values = append(values, pq.Array(opt.ExcludeCounterparts))
 	}
 	if opt.PostID != nil {
 		conditions = append(conditions, "C.post_id=?")
@@ -528,17 +529,6 @@ func (s *chatStore) CountChats(ctx context.Context, appID, userID string, opt mo
 		return 0, err
 	}
 	return count, nil
-}
-
-// Deprecated: use CountChats with models.RecruitingRooms() and models.Unread().
-func (s *chatStore) CountUnreadChats(ctx context.Context, appID, userID string) (int, error) {
-	opt := models.GetOption{}
-	for _, f := range []models.GetOptionFunc{models.RecruitingRooms(), models.Unread()} {
-		if err := f(&opt); err != nil {
-			return 0, err
-		}
-	}
-	return s.CountChats(ctx, appID, userID, opt)
 }
 
 func (s *chatStore) GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error) {

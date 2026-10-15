@@ -326,9 +326,8 @@ type GetOption struct {
 	Keyword        *string
 	// AwaitingReply also counts rooms nobody has spoken in yet.
 	AwaitingReply bool
-	// RecruiterRooms keeps rooms bound to a post or holding a card sent to the
-	// viewer; the official room every list open recreates has neither.
-	RecruiterRooms bool
+	// ExcludeCounterparts drops the rooms whose other side is one of these users.
+	ExcludeCounterparts []string
 	// ExcludeOwnApplications drops the rooms the viewer applied through.
 	ExcludeOwnApplications bool
 }
@@ -374,11 +373,14 @@ func ByKeyword(keyword string) GetOptionFunc {
 	}
 }
 
-// RecruitingRooms keeps only what the viewer recruits in. Opt in per call — a
-// user can be both a recruiter and a job seeker.
-func RecruitingRooms() GetOptionFunc {
+// RecruitingRooms keeps only what the viewer recruits in: it drops the rooms
+// with the app's official accounts, which every list open recreates, and the
+// rooms the viewer applied through. Each app has its own official accounts, so
+// the caller names them. Opt in per call — a user can be both a recruiter and
+// a job seeker.
+func RecruitingRooms(officialIDs []string) GetOptionFunc {
 	return func(opt *GetOption) error {
-		opt.RecruiterRooms = true
+		opt.ExcludeCounterparts = officialIDs
 		opt.ExcludeOwnApplications = true
 		return nil
 	}

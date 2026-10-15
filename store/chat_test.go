@@ -30,7 +30,7 @@ func TestCountChatsUnreadRooms(t *testing.T) {
 	defer db.Close()
 
 	opt := models.GetOption{}
-	for _, f := range []models.GetOptionFunc{models.RecruitingRooms(), models.Unread()} {
+	for _, f := range []models.GetOptionFunc{models.RecruitingRooms([]string{"official-1"}), models.Unread()} {
 		if err := f(&opt); err != nil {
 			t.Fatalf("option failed: %v", err)
 		}
@@ -43,10 +43,10 @@ func TestCountChatsUnreadRooms(t *testing.T) {
 		t.Errorf("count = %d, want 3", count)
 	}
 
-	// 未讀的兩種來源都要在；官方房（沒有 post_id）與他自己去應徵的房都不能算進去
+	// 未讀的兩種來源都要在；官方房與他自己去應徵的房都不能算進去
 	for _, want := range []string{
 		"CT.unread_count>0 OR C.last_message_id IS NULL",
-		"C.post_id IS NOT NULL",
+		"CT.receiver_id<>ALL(",
 		"public.resume_relation RR",
 		"public.business_card_snapshot BCS",
 	} {
@@ -59,6 +59,7 @@ func TestCountChatsUnreadRooms(t *testing.T) {
 	wantArgs := []driver.Value{
 		"app-1", "user-1",
 		int64(models.Deleted), int64(models.Pass), int64(models.NeverGotMessages),
+		`{"official-1"}`,
 		// 排除自己是求職方的房：履歷一次、名片一次
 		"user-1", "user-1",
 	}
@@ -399,21 +400,35 @@ func (r *recordingRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-// A card sent to a vendor opens a room with no post, and the recruiter console still
-// has to list it.
-func TestRecruitingRoomsKeepsCardRoomsWithoutAPost(t *testing.T) {
+// A card sent to a vendor and a recruiter's talent-pool chat both open a room with no
+// post, and the second carries no card either. The recruiter console has to list both;
+// only the official rooms, recognised by the counterpart, stay out.
+func TestRecruitingRoomsKeepsRoomsWithoutAPost(t *testing.T) {
 	opt := models.GetOption{}
-	if err := models.RecruitingRooms()(&opt); err != nil {
+	if err := models.RecruitingRooms([]string{"official-1", "official-2"})(&opt); err != nil {
 		t.Fatalf("option failed: %v", err)
 	}
-	conditions, _ := chatConditions("app-1", "user-1", opt, true)
+	conditions, values := chatConditions("app-1", "user-1", opt, true)
 	query := strings.Join(conditions, " AND ")
 
-	if !strings.Contains(query, "(C.post_id IS NOT NULL OR C.business_card_snapshot_id IS NOT NULL)") {
-		t.Errorf("recruiting rooms drops the card rooms that carry no post:\n%s", query)
+	for _, dropped := range []string{"C.post_id IS NOT NULL", "C.business_card_snapshot_id IS NOT NULL"} {
+		if strings.Contains(query, dropped) {
+			t.Errorf("recruiting rooms still requires %q, which drops the talent-pool rooms:\n%s", dropped, query)
+		}
+	}
+	if !strings.Contains(query, "CT.receiver_id<>ALL(?)") {
+		t.Errorf("recruiting rooms no longer excludes the official rooms:\n%s", query)
 	}
 	// Cards the viewer sent mark their own applications, which stay out.
 	if !strings.Contains(query, "public.business_card_snapshot BCS") {
 		t.Errorf("recruiting rooms no longer excludes the viewer's own applications:\n%s", query)
+	}
+
+	official, err := values[len(values)-3].(driver.Valuer).Value()
+	if err != nil {
+		t.Fatalf("official ids value failed: %v", err)
+	}
+	if official != `{"official-1","official-2"}` {
+		t.Errorf("official ids arg = %v, want both ids", official)
 	}
 }

@@ -30,7 +30,7 @@ type Chat interface {
 	GetChats(ctx context.Context, appID, userID string, next string, count int, opt models.GetOption) ([]*models.ChatRoom, error)
 	CountByPostIDs(ctx context.Context, appID, userID string, postIDs []string) (map[string]int, error)
 	CountChats(ctx context.Context, appID, userID string, opt models.GetOption) (int, error)
-	// Deprecated: use CountChats with models.RecruitingRooms() and models.Unread().
+	// Deprecated: use CountChats with models.RecruitingRooms and models.Unread().
 	CountUnreadChats(ctx context.Context, appID, userID string) (int, error)
 	GetChatID(ctx context.Context, appID, senderID, receiverID string, postID *string, opts ...models.GetChatIDOptionFunc) (string, bool, error)
 	Read(ctx context.Context, userID, chatID string) error

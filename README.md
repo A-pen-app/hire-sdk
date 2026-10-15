@@ -150,6 +150,10 @@ models.IsOfficialRole()
 // Filter to one recruit post
 models.ByChatPostID(postID)
 
+// Only the rooms the caller recruits in. Pass the app's official account ids:
+// their rooms are left out, and so are the caller's own applications.
+models.RecruitingRooms(officialIDs)
+
 // Search the applicant's real_name -- resume snapshot or business card, either
 // counts. Blank input is dropped rather than matching everything.
 models.ByRealName(keyword)
